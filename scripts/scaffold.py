@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""
+scaffold.py — Bootstrap a new LLM Wiki directory structure.
+
+Usage:
+    python3 scaffold.py <wiki-root> "<Topic Title>"
+
+Example:
+    python3 scaffold.py ~/wikis/ai-research "AI Research"
+
+Creates a complete wiki directory with CLAUDE.md, scripts, templates,
+and initial files (index.md, hot.md, questions.md).
+"""
+
+import os
+import shutil
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+
+def scaffold(root: str, title: str) -> None:
+    root_path = Path(root).resolve()
+    today = date.today()
+    today_iso = today.isoformat()
+    now_hm = datetime.now().strftime("%H:%M")
+
+    if root_path.exists() and any(root_path.iterdir()):
+        print(f"ERROR: {root} already exists and is not empty", file=sys.stderr)
+        sys.exit(1)
+
+    dirs = [
+        "raw/articles",
+        "raw/papers",
+        "raw/notes",
+        "raw/archive",
+        "wiki/sources",
+        "wiki/concepts",
+        "wiki/entities",
+        "wiki/syntheses",
+        "wiki/meta",
+        "log",
+        "audit",
+        "audit/resolved",
+        "scripts",
+        "_templates",
+    ]
+
+    for d in dirs:
+        (root_path / d).mkdir(parents=True, exist_ok=True)
+    print(f"Created directory tree under {root}/")
+
+    # .gitkeep for empty dirs
+    _write(root_path, "audit/.gitkeep", "")
+    _write(root_path, "audit/resolved/.gitkeep", "")
+
+    # Copy scripts from template repo
+    script_src = Path(__file__).resolve().parent
+    for script_name in ["scaffold.py", "create_page.py", "lint_wiki.py", "audit_review.py"]:
+        src = script_src / script_name
+        if src.exists():
+            shutil.copy2(src, root_path / "scripts" / script_name)
+
+    # Copy templates from template repo
+    template_src = Path(__file__).resolve().parent.parent / "_templates"
+    if template_src.exists():
+        for tmpl in template_src.glob("*.md"):
+            shutil.copy2(tmpl, root_path / "_templates" / tmpl.name)
+
+    print("Copied scripts and templates")
+
+    # .gitignore
+    gitignore = """.obsidian/
+.claude/
+*.tmp
+"""
+    _write(root_path, ".gitignore", gitignore)
+
+    # CLAUDE.md
+    claude_md = f"""# {title} Knowledge Base
+
+> Schema document — read at the start of every session together with `hot.md` and `wiki/index.md`.
+
+## Role
+
+You are a knowledge architect. You build and maintain a persistent, compounding wiki inside this Obsidian vault. You don't just answer questions. You write, cross-reference, file, and maintain a structured knowledge base that gets richer with every source added and every question asked.
+
+The wiki is the product. Chat is just the interface.
+
+## Principles
+
+- **Raw is immutable.** Never modify files in `raw/`. They are the source of truth for error correction.
+- **Origin matters.** Pages with `origin: self-written` must never be overwritten by the LLM. Read them, reference them, but do not edit them.
+- **Session startup.** At the start of every session, read this file (CLAUDE.md), then `hot.md`, then `wiki/index.md`. This orients you to the wiki's current state.
+- **Commit after every ingest.** Use git to version every change. This enables rollback if an ingest goes wrong.
+
+## Operations
+
+### Ingest
+
+When a new source is added to `raw/`:
+
+1. Read the source file
+2. Discuss key takeaways with the user
+3. Create a source summary page: `python scripts/create_page.py . source "<title>" --sources "raw/<path>" --title-zh "<中文标题>"`, then Edit to fill content
+4. For each new concept or entity mentioned, create a page: `python scripts/create_page.py . <type> "<name>"`, then Edit to fill content
+5. Update all existing concept/entity/synthesis pages that are relevant (cascade update)
+6. Update `wiki/index.md` — add new pages under the correct section
+7. Append log entry to `log/{{date}}.md`
+8. Update `hot.md` with the latest activity
+
+A single source may touch 10-15 wiki pages. That is expected.
+
+### Query
+
+When answering questions:
+
+1. Read `hot.md` first (~500 words, usually enough to orient)
+2. Read `wiki/index.md` to find relevant pages
+3. Drill into specific pages for details
+4. Synthesize an answer with `[[page-name]]` citations
+
+Good answers can be saved back as new synthesis pages.
+
+### Lint
+
+Run periodically to keep the wiki healthy:
+
+1. **Structural check:** `python scripts/lint_wiki.py .` — catches dead links, orphan pages, missing index entries, log format issues
+2. **Semantic check:** Review pages for contradictions between sources, missing cross-references, concepts mentioned but not yet documented, summaries that could be improved
+
+Generate a lint report at `wiki/meta/lint-report-{{date}}.md`. Wait for user confirmation before making changes.
+
+### Audit
+
+When the user spots an error in the wiki:
+
+1. User creates a feedback file in `audit/` (YAML frontmatter + description)
+2. Run `python scripts/audit_review.py . --open` to see pending feedback
+3. Read each audit item, check against the original `raw/` source
+4. Fix the wiki page and any related pages affected
+5. Move processed audit to `audit/resolved/`
+6. Log the correction
+
+**When audit feedback conflicts with raw source, raw source wins.**
+
+## Naming Conventions
+
+- **Concept pages** (`wiki/concepts/`): Title Case noun phrases. File: `Attention-Mechanism.md`
+- **Entity pages** (`wiki/entities/`): Proper names. File: `OpenAI.md`
+- **Source pages** (`wiki/sources/`): kebab-case slug. File: `attention-is-all-you-need.md`
+- **Synthesis pages** (`wiki/syntheses/`): Descriptive title. File: `transformer-vs-rnn-comparison.md`
+- All pages require YAML frontmatter with: `title`, `type`, `summary`, `tags`, `sources`, `origin`, `status`, `created`, `updated`
+
+## Writing Style
+
+- Summaries in Chinese
+- Technical terms keep English original, annotate Chinese on first appearance (e.g., Transformer（变压器网络）)
+- Diagrams: use **mermaid** syntax
+- Formulas: use **KaTeX** (`$inline$` or `$$block$$`)
+- Contradictions: present both views with citations, do not arbitrate
+
+## Page Status Lifecycle
+
+- `seed` — just created, minimal content
+- `developing` — has substantive content from multiple sources
+- `mature` — well-covered, cross-referenced, unlikely to change significantly
+- `evergreen` — stable knowledge, periodically reviewed
+
+## Notes for the LLM
+
+- Language: bilingual (Chinese summary, English technical terms)
+- Tone: neutral, analytical
+- Depth: adjust based on user's question — brief for overviews, detailed for deep-dives
+- Handling contradictions: state both views, cite each source, add to open questions if unresolved
+"""
+    _write(root_path, "CLAUDE.md", claude_md)
+    print("Created CLAUDE.md")
+
+    # wiki/index.md
+    index_md = f"""# Index — {title}
+
+> One-sentence scope of the wiki.
+
+## Sources
+
+*(none yet)*
+
+## Concepts
+
+*(none yet)*
+
+## Entities
+
+*(none yet)*
+
+## Syntheses
+
+*(none yet)*
+
+## Open Questions
+
+- <First research question>
+"""
+    _write(root_path, "wiki/index.md", index_md)
+    print("Created wiki/index.md")
+
+    # hot.md
+    hot_md = f"""# Hot Cache
+
+> Recent activity summary. Read at session start. Update at session end.
+
+## Recently Ingested
+
+*(none yet)*
+
+## Recently Queried
+
+*(none yet)*
+
+## Active Threads
+
+*(none yet)*
+
+## Open Questions
+
+*(none yet)*
+"""
+    _write(root_path, "hot.md", hot_md)
+    print("Created hot.md")
+
+    # questions.md
+    questions_md = """# Open Questions
+
+## Active
+
+*(none yet)*
+
+## Resolved
+
+*(none yet)*
+"""
+    _write(root_path, "questions.md", questions_md)
+    print("Created questions.md")
+
+    # log/<today>.md
+    log_md = f"""# {today_iso}
+
+## [{now_hm}] scaffold | Initialized {title} knowledge base
+- Created directory tree (raw/, wiki/, log/, audit/, scripts/, _templates/)
+- Created CLAUDE.md schema
+- Created wiki/index.md, hot.md, questions.md
+- Copied scripts and templates
+"""
+    _write(root_path, f"log/{today_iso}.md", log_md)
+    print(f"Created log/{today_iso}.md")
+
+    print(f"""
+Done. Wiki scaffolded at: {root}/
+
+Next steps:
+  1. cd {root} && git init && git add -A && git commit -m "init: scaffold {title} wiki"
+  2. Open the directory in Obsidian
+  3. Add sources to raw/ (use Obsidian Web Clipper for web articles)
+  4. Open Claude Code in this directory and say "ingest raw/articles/<file>.md"
+  5. Run lint:  python scripts/lint_wiki.py .
+""")
+
+
+def _write(root: Path, path: str, content: str) -> None:
+    full = root / path
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content, encoding="utf-8")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print(__doc__)
+        sys.exit(1)
+    scaffold(sys.argv[1], sys.argv[2])
