@@ -329,17 +329,28 @@ def lint(root: str) -> int:
     elif audit_targets_to_check:
         print("✅ All open-audit targets exist")
 
-    # ── Pass 8: raw_path existence ──────────────────────────────────────────
+    # ── Pass 8: raw_path existence + hash verification ────────────────────
+    import hashlib as _hashlib
     missing_raw: list[tuple[str, str]] = []
+    hash_mismatch: list[tuple[str, str]] = []
     for md_file in all_wiki_files:
         text = md_file.read_text(encoding="utf-8")
         fm = parse_frontmatter(text)
         if fm and fm.get("raw_path"):
             raw_rel = fm["raw_path"].strip('"').strip("'")
-            if raw_rel and not (root_path / raw_rel).exists():
-                missing_raw.append(
-                    (str(md_file.relative_to(root_path)), raw_rel)
-                )
+            if raw_rel:
+                raw_full = root_path / raw_rel
+                if not raw_full.exists():
+                    missing_raw.append(
+                        (str(md_file.relative_to(root_path)), raw_rel)
+                    )
+                elif fm.get("raw_hash"):
+                    stored_hash = str(fm["raw_hash"]).strip('"').strip("'")
+                    actual_hash = _hashlib.sha256(raw_full.read_bytes()).hexdigest()
+                    if stored_hash and stored_hash != actual_hash:
+                        hash_mismatch.append(
+                            (str(md_file.relative_to(root_path)), raw_rel)
+                        )
     if missing_raw:
         print(f"\n🟡 Source pages with missing raw_path ({len(missing_raw)}):")
         for page, raw in missing_raw:
@@ -347,6 +358,13 @@ def lint(root: str) -> int:
         issues += len(missing_raw)
     else:
         print("✅ All source raw_path references exist")
+    if hash_mismatch:
+        print(f"\n🟡 raw_hash mismatch — source file changed since ingest ({len(hash_mismatch)}):")
+        for page, raw in hash_mismatch:
+            print(f"   {page} ← {raw}")
+        issues += len(hash_mismatch)
+    else:
+        print("✅ All raw_hash values match current source files")
 
     # ── Pass 9: tag taxonomy ──────────────────────────────────────────────
     taxonomy = load_tag_taxonomy(root_path)

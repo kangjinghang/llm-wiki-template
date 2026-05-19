@@ -585,6 +585,60 @@ class TestComputeHash:
         content = out.read_text(encoding="utf-8")
         assert "raw_hash:" not in content
 
+    def test_lint_flags_hash_mismatch(self, tmp_path):
+        """When raw file changes after ingest, lint should detect the mismatch."""
+        import hashlib
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "sources").mkdir(parents=True)
+        (tmp_path / "raw" / "articles").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        # Create raw file and compute its hash
+        raw_file = tmp_path / "raw" / "articles" / "test.md"
+        original_content = "Original content"
+        raw_file.write_text(original_content, encoding="utf-8")
+        original_hash = hashlib.sha256(original_content.encode()).hexdigest()
+        # Create wiki page with the hash
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test-src]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "sources" / "test-src.md").write_text(
+            f'---\ntitle: Test\ntype: source\nraw_path: "raw/articles/test.md"\n'
+            f'raw_hash: "{original_hash}"\n---\nBody\n',
+            encoding="utf-8",
+        )
+        # Modify the raw file
+        raw_file.write_text("Modified content", encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 1
+        assert "raw_hash mismatch" in proc.stdout
+
+    def test_lint_passes_when_hash_matches(self, tmp_path):
+        """When raw file is unchanged, lint should pass hash check."""
+        import hashlib
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "sources").mkdir(parents=True)
+        (tmp_path / "raw" / "articles").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        raw_file = tmp_path / "raw" / "articles" / "test.md"
+        content = "Stable content"
+        raw_file.write_text(content, encoding="utf-8")
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test-src]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "sources" / "test-src.md").write_text(
+            f'---\ntitle: Test\ntype: source\nraw_path: "raw/articles/test.md"\n'
+            f'raw_hash: "{content_hash}"\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
+        assert "raw_hash mismatch" not in proc.stdout
+
 
 # --- --review-by integration ---
 
