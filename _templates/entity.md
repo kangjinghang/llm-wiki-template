@@ -14,18 +14,18 @@ entity_type: ""
 
 # {title}
 
-## 概述
+## Overview / 概述
 
-[一段话描述这个实体]
+[One paragraph describing this entity.]
 
-## 关键事实
+## Key Facts / 关键事实
 
 -
 
-## 关联页面
+## Related Pages / 关联页面
 
 - [[]] —
 
-## 来源
+## Sources / 来源
 
 -

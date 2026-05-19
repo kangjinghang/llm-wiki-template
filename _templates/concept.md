@@ -13,26 +13,26 @@ updated: {date}
 
 # {title}
 
-## 定义
+## Definition / 定义
 
-[这个概念是什么，一段话]
+[What is this concept? One paragraph.]
 
-## 工作原理
+## How It Works / 工作原理
 
-[机制或解释]
+[Mechanism or explanation.]
 
-## 为什么重要
+## Why It Matters / 为什么重要
 
-[在这个领域的意义]
+[Significance in this domain.]
 
-## 示例
+## Examples / 示例
 
 -
 
-## 关联页面
+## Related Pages / 关联页面
 
 - [[]] —
 
-## 来源
+## Sources / 来源
 
 -

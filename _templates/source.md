@@ -16,23 +16,23 @@ raw_path: ""
 
 # {title}
 
-## 摘要
+## Abstract / 摘要
 
-[2-3 句话概括这份来源的核心内容]
+[2–3 sentences summarizing the core content of this source.]
 
-## 关键事实
+## Key Facts / 关键事实
 
-- 事实 1
-- 事实 2
+- Fact 1
+- Fact 2
 
-## 关联页面
+## Related Pages / 关联页面
 
 - [[]] —
 
-## 原文证据摘录
+## Evidence / 原文证据摘录
 
-> "原文关键段落"
+> "Key passage from the original source."
 
-## 待核实问题
+## Claims to Verify / 待核实问题
 
-- 哪些说法需要交叉验证？
+- Which claims need cross-verification?

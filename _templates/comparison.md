@@ -14,20 +14,20 @@ subjects: []
 
 # {title}
 
-## 概述
+## Overview / 概述
 
-[为什么要比较这两个东西]
+[Why compare these two things? What decision or question motivates this?]
 
-## 对比
+## Comparison / 对比
 
-| 维度 | A | B |
-|------|---|---|
+| Dimension | A | B |
+|-----------|---|---|
 | | | |
 
-## 结论
+## Conclusion / 结论
 
-[一个明确的结论——哪个场景用哪个]
+[A clear takeaway — which to use when, or what the comparison reveals.]
 
-## 来源
+## Sources / 来源
 
 -
