@@ -1,5 +1,7 @@
 # llm-wiki-template
 
+License: MIT — see [LICENSE](LICENSE)
+
 A reusable template for building personal knowledge bases using LLMs.
 
 Based on [Karpathy's llm-wiki pattern](https://github.com/karpathy/llm-wiki) with extensions for multi-wiki management, format-guaranteed page creation, and bilingual (zh/en) support.
@@ -114,6 +116,17 @@ Read `_schema/CLAUDE.md` before your first ingest to understand what the agent w
 **Lint** — run `lint_wiki.py` periodically to catch structural issues. The agent generates a report and waits for your confirmation before making changes.
 
 **Audit** — when you spot a factual error in the wiki, drop a note in `audit/`. The agent checks it against the raw source, fixes the wiki, and moves the note to `audit/resolved/`.
+
+## Development
+
+Requirements: Python 3.10+, [pytest](https://pytest.org).
+
+```bash
+pip install pytest
+pytest -q
+```
+
+CI runs pytest on push/PR via `.github/workflows/ci.yml`.
 
 ## Credits
 
