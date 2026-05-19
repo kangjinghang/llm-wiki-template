@@ -150,7 +150,7 @@ class TestCreatePageCLI:
         (wiki / "_templates").mkdir(parents=True)
         (wiki / "wiki" / "concepts").mkdir(parents=True)
         (wiki / "_templates" / "concept.md").write_text(
-            '---\ntitle: ""\ntype: concept\n---\n# {title}\n', encoding="utf-8"
+            '---\ntitle: ""\ntype: concept\ntags: []\n---\n# {title}\n', encoding="utf-8"
         )
         script = REPO_ROOT / "scripts" / "create_page.py"
         proc = subprocess.run(
@@ -161,7 +161,10 @@ class TestCreatePageCLI:
         out = wiki / "wiki" / "concepts" / "test-page.md"
         assert out.exists()
         content = out.read_text(encoding="utf-8")
-        assert "Test Page" in content
+        assert 'title: "Test Page"' in content
+        assert "type: concept" in content
+        assert "tags: [A, B]" in content
+        assert "# Test Page" in content
 
     def test_rejects_duplicate_page(self, tmp_path):
         wiki = tmp_path / "wiki"
