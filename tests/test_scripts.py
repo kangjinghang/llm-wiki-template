@@ -584,3 +584,44 @@ class TestComputeHash:
         out = wiki / "wiki" / "sources" / "missing-raw.md"
         content = out.read_text(encoding="utf-8")
         assert "raw_hash:" not in content
+
+
+# --- --review-by integration ---
+
+class TestReviewBy:
+    def test_sets_review_by_in_frontmatter(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "concepts").mkdir(parents=True)
+        (wiki / "_templates" / "concept.md").write_text(
+            '---\ntitle: ""\ntype: concept\nreview_by: ""\n---\n# {title}\n',
+            encoding="utf-8",
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "concept", "Time Sensitive",
+             "--review-by", "2026-06-01"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        out = wiki / "wiki" / "concepts" / "time-sensitive.md"
+        content = out.read_text(encoding="utf-8")
+        assert 'review_by: "2026-06-01"' in content
+
+    def test_no_review_by_without_flag(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "concepts").mkdir(parents=True)
+        (wiki / "_templates" / "concept.md").write_text(
+            '---\ntitle: ""\ntype: concept\nreview_by: ""\n---\n# {title}\n',
+            encoding="utf-8",
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "concept", "No Review"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        out = wiki / "wiki" / "concepts" / "no-review.md"
+        content = out.read_text(encoding="utf-8")
+        assert 'review_by: ""' in content

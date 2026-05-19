@@ -67,7 +67,7 @@ my-topic/
 |--------|---------|-------|
 | `scaffold.py` | Bootstrap a new wiki | `python scripts/scaffold.py <path> "<title>"` |
 | `create_page.py` | Create a wiki page with correct frontmatter | `python scripts/create_page.py <root> <type> "<title>" [options]` |
-| `lint_wiki.py` | Health check (7 structural checks) | `python scripts/lint_wiki.py <root>` |
+| `lint_wiki.py` | Health check (10 structural checks) | `python scripts/lint_wiki.py <root>` |
 | `audit_review.py` | List and group open audit feedback | `python scripts/audit_review.py <root> [--open\|--resolved\|--all]` |
 
 ### create_page.py options
@@ -85,6 +85,9 @@ python scripts/create_page.py . entity "OpenAI" --tags "AI,Company"
 # Create a synthesis/comparison
 python scripts/create_page.py . synthesis "Transformer vs RNN"
 python scripts/create_page.py . comparison "BERT vs GPT"
+
+# Create a source page with SHA256 hash of the raw file
+python scripts/create_page.py . source "Transformer Paper" --raw-path "raw/papers/attention.md" --compute-hash
 ```
 
 ### lint_wiki.py checks
@@ -97,10 +100,12 @@ python scripts/create_page.py . comparison "BERT vs GPT"
 6. Audit shape — every `audit/*.md` has valid YAML frontmatter
 7. Audit targets — every open audit's `target` file exists
 8. raw_path existence — source pages' `raw_path` must point to a real file
+9. Tag taxonomy — tags on wiki pages must appear in the CLAUDE.md taxonomy (if defined)
+10. Stale pages — pages with review_by date in the past
 
 ## Page Templates
 
-Four templates in `_templates/`: `source`, `concept`, `entity`, `synthesis/comparison`. Each generates a page with YAML frontmatter and bilingual section headings. The templates are designed for bilingual wikis (English technical terms, Chinese or English body text — your choice).
+Five templates in `_templates/`: `source`, `concept`, `entity`, `synthesis`, `comparison`. Each generates a page with YAML frontmatter and bilingual section headings. The templates are designed for bilingual wikis (English technical terms, Chinese or English body text — your choice).
 
 ## The Schema
 

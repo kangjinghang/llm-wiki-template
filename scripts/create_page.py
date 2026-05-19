@@ -16,6 +16,7 @@ Options:
     --sources "path1,path2"   Comma-separated source paths (optional)
     --raw-path "path"         Raw source file path (source type only)
     --compute-hash            Compute SHA256 of raw_path file and add to frontmatter
+    --review-by "YYYY-MM-DD"   Review-by date for time-sensitive content (optional)
 
 Examples:
     python3 create_page.py . concept "Attention Mechanism" --title-zh "注意力机制" --tags "AI,Deep-Learning"
@@ -126,6 +127,7 @@ def main() -> int:
     parser.add_argument("--sources", default=None, help='Comma-separated source paths')
     parser.add_argument("--raw-path", default=None, help="Raw source file path (source type only)")
     parser.add_argument("--compute-hash", action="store_true", help="Compute SHA256 of raw_path file and add to frontmatter")
+    parser.add_argument("--review-by", default=None, help="Review-by date (YYYY-MM-DD) for time-sensitive content")
     args = parser.parse_args()
 
     wiki_root = Path(args.wiki_root).resolve()
@@ -181,6 +183,10 @@ def main() -> int:
 
     # Fill template
     content = fill_template(template, args.title, args.title_zh, today, tags, sources, args.raw_path)
+
+    # Add review_by to frontmatter if provided
+    if args.review_by:
+        content = fill_fm_field(content, "review_by", f'"{args.review_by}"')
 
     # Add hash to frontmatter if computed
     if raw_hash:
