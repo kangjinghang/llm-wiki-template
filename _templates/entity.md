@@ -10,6 +10,7 @@ status: seed
 created: {date}
 updated: {date}
 entity_type: ""
+review_by: ""
 ---
 
 # {title}
@@ -29,3 +30,8 @@ entity_type: ""
 ## Sources / 来源
 
 -
+
+## Notes / 笔记
+
+<!-- human:start -->
+<!-- human:end -->

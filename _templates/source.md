@@ -12,6 +12,7 @@ updated: {date}
 source_type: ""
 source_language: ""
 raw_path: ""
+review_by: ""
 ---
 
 # {title}
@@ -36,3 +37,8 @@ raw_path: ""
 ## Claims to Verify / 待核实问题
 
 - Which claims need cross-verification?
+
+## Notes / 笔记
+
+<!-- human:start -->
+<!-- human:end -->

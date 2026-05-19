@@ -17,6 +17,8 @@ Checks:
   6. audit/ shape — every audit/*.md parses as a valid AuditEntry
   7. Audit targets — every open audit's `target` file must exist
   8. raw_path existence — source pages' raw_path must point to a real file
+  9. Tag taxonomy — tags on wiki pages must appear in the CLAUDE.md taxonomy (if defined)
+  10. Stale pages — pages with review_by date in the past
 
 Exit codes:
   0 — no issues found
@@ -108,6 +110,39 @@ def parse_frontmatter(text: str) -> dict | None:
             result[key] = val
         i += 1
     return result
+
+
+def load_tag_taxonomy(root_path: Path) -> set[str] | None:
+    """Load the tag taxonomy from CLAUDE.md. Returns None if no taxonomy found."""
+    for schema_name in ("CLAUDE.md", "_schema/CLAUDE.md", "SCHEMA.md"):
+        schema_path = root_path / schema_name
+        if not schema_path.exists():
+            continue
+        text = schema_path.read_text(encoding="utf-8")
+        in_taxonomy = False
+        tags: set[str] = set()
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if "tag taxonomy" in stripped.lower():
+                in_taxonomy = True
+                continue
+            if in_taxonomy and stripped.startswith("## ") and "tag" not in stripped.lower():
+                if tags:
+                    return tags
+                continue
+            if in_taxonomy and stripped.startswith("- **"):
+                import re as _re
+                m = _re.match(r"-\s+\*\*([^*]+)\*\*", stripped)
+                if m:
+                    for tag in m.group(1).split(","):
+                        tags.add(tag.strip().lower())
+            elif in_taxonomy and stripped.startswith("- ") and not stripped.startswith("- ["):
+                tag = stripped[2:].strip().rstrip(",")
+                if tag and not tag.startswith("*") and not tag.startswith("["):
+                    tags.add(tag.lower())
+        if tags:
+            return tags
+    return None
 
 
 def lint(root: str) -> int:
@@ -310,6 +345,60 @@ def lint(root: str) -> int:
         issues += len(missing_raw)
     else:
         print("✅ All source raw_path references exist")
+
+    # ── Pass 9: tag taxonomy ──────────────────────────────────────────────
+    taxonomy = load_tag_taxonomy(root_path)
+    if taxonomy:
+        invalid_tags: list[tuple[str, str]] = []
+        for md_file in all_wiki_files:
+            text = md_file.read_text(encoding="utf-8")
+            fm = parse_frontmatter(text)
+            if fm and fm.get("tags"):
+                tags_val = fm["tags"]
+                if isinstance(tags_val, list):
+                    page_tags = [str(t).lower().strip() for t in tags_val]
+                else:
+                    page_tags = [str(tags_val).lower().strip()]
+                for tag in page_tags:
+                    if tag and tag not in taxonomy:
+                        invalid_tags.append(
+                            (str(md_file.relative_to(root_path)), tag)
+                        )
+        if invalid_tags:
+            print(f"\n🟡 Tags not in taxonomy ({len(invalid_tags)}):")
+            for page, tag in invalid_tags:
+                print(f'   {page}: "{tag}"')
+            issues += len(invalid_tags)
+        else:
+            print("✅ All tags are in the taxonomy")
+    else:
+        print("⚠️  No tag taxonomy found in CLAUDE.md — skipping tag check")
+
+    # ── Pass 10: stale pages (review_by) ──────────────────────────────────
+    from datetime import date as _date
+    today = _date.today()
+    stale_pages: list[tuple[str, str]] = []
+    for md_file in all_wiki_files:
+        text = md_file.read_text(encoding="utf-8")
+        fm = parse_frontmatter(text)
+        if fm and fm.get("review_by"):
+            review_date_str = str(fm["review_by"]).strip().strip('"').strip("'")
+            if review_date_str:
+                try:
+                    review_date = _date.fromisoformat(review_date_str)
+                    if review_date < today:
+                        stale_pages.append(
+                            (str(md_file.relative_to(root_path)), review_date_str)
+                        )
+                except ValueError:
+                    pass
+    if stale_pages:
+        print(f"\n🟡 Pages past review date ({len(stale_pages)}):")
+        for page, review_date in stale_pages:
+            print(f"   {page} — review_by: {review_date}")
+        issues += len(stale_pages)
+    else:
+        print("✅ No pages past review date")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")

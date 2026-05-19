@@ -15,6 +15,7 @@ Options:
     --tags "tag1,tag2"        Comma-separated tags (optional)
     --sources "path1,path2"   Comma-separated source paths (optional)
     --raw-path "path"         Raw source file path (source type only)
+    --compute-hash            Compute SHA256 of raw_path file and add to frontmatter
 
 Examples:
     python3 create_page.py . concept "Attention Mechanism" --title-zh "注意力机制" --tags "AI,Deep-Learning"
@@ -27,6 +28,7 @@ Exit codes:
 """
 
 import argparse
+import hashlib
 import re
 import sys
 from datetime import date
@@ -123,6 +125,7 @@ def main() -> int:
     parser.add_argument("--tags", default=None, help='Comma-separated tags (e.g. "AI,Deep-Learning")')
     parser.add_argument("--sources", default=None, help='Comma-separated source paths')
     parser.add_argument("--raw-path", default=None, help="Raw source file path (source type only)")
+    parser.add_argument("--compute-hash", action="store_true", help="Compute SHA256 of raw_path file and add to frontmatter")
     args = parser.parse_args()
 
     wiki_root = Path(args.wiki_root).resolve()
@@ -169,8 +172,22 @@ def main() -> int:
         if not raw_full.exists():
             print(f"WARNING: raw_path does not exist: {raw_full}", file=sys.stderr)
 
+    # Compute SHA256 hash of raw source if requested
+    raw_hash = None
+    if args.compute_hash and args.raw_path:
+        raw_full = wiki_root / args.raw_path
+        if raw_full.exists():
+            raw_hash = hashlib.sha256(raw_full.read_bytes()).hexdigest()
+
     # Fill template
     content = fill_template(template, args.title, args.title_zh, today, tags, sources, args.raw_path)
+
+    # Add hash to frontmatter if computed
+    if raw_hash:
+        # Insert raw_hash before the closing --- of frontmatter
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            content = "---" + parts[1].rstrip() + f'\nraw_hash: "{raw_hash}"\n---' + parts[2]
 
     # Write file
     out_dir.mkdir(parents=True, exist_ok=True)

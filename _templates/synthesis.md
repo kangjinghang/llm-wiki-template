@@ -9,6 +9,7 @@ origin: agent-compiled
 status: seed
 created: {date}
 updated: {date}
+review_by: ""
 ---
 
 # {title}
@@ -43,3 +44,8 @@ updated: {date}
 ## Open Questions / 未解问题
 
 - What would change this conclusion?
+
+## Notes / 笔记
+
+<!-- human:start -->
+<!-- human:end -->

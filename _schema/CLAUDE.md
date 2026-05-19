@@ -128,6 +128,43 @@ All pages require YAML frontmatter with: `title`, `type`, `summary`, `tags`, `so
 - `mature` — well-covered, cross-referenced, unlikely to change significantly
 - `evergreen` — stable knowledge, periodically reviewed
 
+## Page Thresholds
+
+When deciding whether to create, update, split, or archive a page, follow these rules:
+
+- **Create a page** when an entity or concept appears in 2+ sources, OR is central to a single source (a defining topic, not a passing mention)
+- **Add to existing page** when a new source mentions something already documented
+- **DON'T create a page** for passing mentions, footnotes, or things outside the wiki's domain scope
+- **Split a page** when it exceeds ~200 lines — break into sub-topics with `[[wikilinks]]` between them
+- **Archive a page** when its content is fully superseded by newer pages — move to `raw/archive/`, remove from `index.md`, update inbound links to plain text + "(archived)"
+- **Every page must have at least 2 outbound `[[wikilinks]]`** — isolated pages are invisible to the knowledge graph
+
+## Tag Taxonomy
+
+> **Customize this section** for your domain. Replace the example tags below with your own. New tags MUST be added here before they are used on wiki pages. The lint script checks that all tags exist in this taxonomy.
+
+### Example: AI Research Domain
+
+- **Topics**: deep-learning, nlp, computer-vision, reinforcement-learning, optimization, alignment, reasoning
+- **Methods**: training, fine-tuning, inference, evaluation, data-augmentation, feature-engineering
+- **Artifacts**: model, dataset, benchmark, framework, paper, architecture
+- **Meta**: comparison, controversy, prediction, timeline, definition
+
+### Example: Investment / Quant Finance Domain
+
+- **Strategies**: factor-investing, momentum, mean-reversion, statistical-arbitrage, portfolio-optimization
+- **Instruments**: equity, bond, futures, options, etf, crypto
+- **Analysis**: valuation, risk-management, backtesting, attribution, regime-detection
+- **Data**: fundamental, technical, alternative-data, high-frequency, macro
+- **Meta**: comparison, controversy, prediction, regulation, case-study
+
+### Rules
+
+- Every tag on a page must appear in the taxonomy above
+- If a new tag is needed, add it here first, then use it on pages
+- Tags are lowercase, hyphenated (e.g. `deep-learning` not `Deep Learning`)
+- The lint script will flag any tag not in this taxonomy
+
 ## Writing Style
 
 > **Customize this section** to match your language preference. The defaults below are optimized for a Chinese-primary bilingual wiki. If you're writing in English only, remove the bilingual notes.
@@ -138,6 +175,8 @@ All pages require YAML frontmatter with: `title`, `type`, `summary`, `tags`, `so
 - **Contradictions**: present both views with citations; do not arbitrate. Add to `questions.md` if unresolved.
 - **Diagrams**: use **Mermaid** syntax
 - **Formulas**: use **KaTeX** (`$inline$` or `$$block$$`)
+- **Provenance markers**: on pages that synthesize 3+ sources, append `^[raw/path/to/source.md]` at the end of paragraphs whose claims come from a specific source. This lets readers trace each claim without re-reading the raw file. Single-source pages don't need this — the `sources` frontmatter is sufficient.
+- **Managed blocks**: never edit content between `<!-- human:start -->` and `<!-- human:end -->` markers. These sections contain the user's own notes. The LLM may write above and below, but must preserve these blocks exactly as they are.
 
 ## Notes for the LLM
 
