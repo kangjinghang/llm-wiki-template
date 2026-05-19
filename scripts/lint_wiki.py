@@ -77,8 +77,6 @@ def parse_frontmatter(text: str) -> dict | None:
         return None
     body = m.group(1)
     result: dict = {}
-    # Track multi-line folded strings via simple heuristic: quoted scalars
-    # can contain \n; unquoted values are single-line.
     i = 0
     lines = body.split("\n")
     while i < len(lines):
@@ -92,6 +90,7 @@ def parse_frontmatter(text: str) -> dict | None:
         key, _, rest = line.partition(":")
         key = key.strip()
         val = rest.strip()
+        # Inline array: [a, b, c]
         if val.startswith("[") and val.endswith("]"):
             inner = val[1:-1].strip()
             if not inner:
@@ -105,6 +104,24 @@ def parse_frontmatter(text: str) -> dict | None:
                     else:
                         parsed.append(p.strip('"').strip("'"))
                 result[key] = parsed
+        # Multiline list: key:\n  - value1\n  - value2
+        elif val == "":
+            items: list = []
+            j = i + 1
+            while j < len(lines):
+                next_line = lines[j]
+                if next_line.lstrip().startswith("- ") and next_line.startswith(" "):
+                    item = next_line.strip()[2:].strip()
+                    item = item.strip('"').strip("'")
+                    if item:
+                        items.append(item)
+                    j += 1
+                else:
+                    break
+            if items:
+                result[key] = items
+                i = j
+                continue
         elif val.startswith('"') and val.endswith('"'):
             result[key] = val[1:-1].replace("\\n", "\n").replace('\\"', '"')
         elif val.startswith("'") and val.endswith("'"):
