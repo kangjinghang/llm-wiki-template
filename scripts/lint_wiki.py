@@ -56,8 +56,11 @@ def load_pages(wiki_dir: Path) -> dict[str, Path]:
     pages: dict[str, Path] = {}
     for p in wiki_dir.rglob("*.md"):
         pages[p.stem] = p
+        pages[p.stem.lower()] = p
         rel = p.relative_to(wiki_dir)
-        pages[str(rel.with_suffix(""))] = p
+        rel_str = str(rel.with_suffix(""))
+        pages[rel_str] = p
+        pages[rel_str.lower()] = p
     return pages
 
 
@@ -170,10 +173,12 @@ def lint(root: str) -> int:
         text = md_file.read_text(encoding="utf-8")
         for link in extract_wikilinks(text):
             link = link.strip()
-            if link not in pages and Path(link).stem not in pages:
+            if (link not in pages and link.lower() not in pages
+                    and Path(link).stem not in pages and Path(link).stem.lower() not in pages):
                 dead_links.append((str(md_file.relative_to(root_path)), link))
             else:
-                target = pages.get(link) or pages.get(Path(link).stem)
+                target = (pages.get(link) or pages.get(link.lower())
+                          or pages.get(Path(link).stem) or pages.get(Path(link).stem.lower()))
                 if target:
                     inbound[target.stem].append(md_file.stem)
 
@@ -228,7 +233,8 @@ def lint(root: str) -> int:
 
     missing_pages = [
         (link, count) for link, count in link_counts.items()
-        if count >= 3 and link not in pages and Path(link).stem not in pages
+        if count >= 3 and link not in pages and link.lower() not in pages
+        and Path(link).stem not in pages and Path(link).stem.lower() not in pages
     ]
     if missing_pages:
         print(f"\n🟡 Frequently linked but no page ({len(missing_pages)}):")
