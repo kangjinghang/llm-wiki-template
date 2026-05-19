@@ -96,6 +96,7 @@ python scripts/create_page.py . comparison "BERT vs GPT"
 5. Log shape — every file matches `YYYY-MM-DD.md` with correct H1
 6. Audit shape — every `audit/*.md` has valid YAML frontmatter
 7. Audit targets — every open audit's `target` file exists
+8. raw_path existence — source pages' `raw_path` must point to a real file
 
 ## Page Templates
 

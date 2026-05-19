@@ -24,40 +24,15 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# Import parse_frontmatter from lint_wiki.py (same directory)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lint_wiki import parse_frontmatter
+
 # Ensure stdout handles Unicode on Windows (GBK console default)
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr and hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-
-FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
-
-
-def parse_frontmatter(text: str) -> dict | None:
-    m = FRONTMATTER_RE.match(text)
-    if not m:
-        return None
-    body = m.group(1)
-    result: dict = {}
-    for line in body.split("\n"):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if ":" not in line:
-            continue
-        key, _, rest = line.partition(":")
-        key = key.strip()
-        val = rest.strip()
-        if val.startswith("[") and val.endswith("]"):
-            inner = val[1:-1].strip()
-            result[key] = [p.strip().strip('"').strip("'") for p in inner.split(",") if p.strip()]
-        elif val.startswith('"') and val.endswith('"'):
-            result[key] = val[1:-1].replace("\\n", "\n").replace('\\"', '"')
-        elif val.startswith("'") and val.endswith("'"):
-            result[key] = val[1:-1]
-        else:
-            result[key] = val
-    return result
 
 
 def extract_comment_one_line(text: str) -> str:

@@ -97,7 +97,8 @@ def scaffold(root: str, title: str) -> None:
             cleaned.append(line)
         claude_md = "\n".join(cleaned)
     else:
-        claude_md = _inline_claude_md(title)
+        print("ERROR: _schema/CLAUDE.md not found — cannot generate wiki schema", file=sys.stderr)
+        sys.exit(1)
 
     _write(root_path, "CLAUDE.md", claude_md)
     print("Created CLAUDE.md")
@@ -190,101 +191,6 @@ Next steps:
   4. Open Claude Code in this directory and say "ingest raw/articles/<file>.md"
   5. Run lint:  python scripts/lint_wiki.py .
 """)
-
-
-def _inline_claude_md(title: str) -> str:
-    """Fallback inline schema — used when _schema/CLAUDE.md is not found."""
-    return f"""# {title} Knowledge Base
-
-> Schema document — read at the start of every session together with `hot.md` and `wiki/index.md`.
-
-## Role
-
-You are a knowledge architect. You build and maintain a persistent, compounding wiki inside this directory. You don't just answer questions. You write, cross-reference, file, and maintain a structured knowledge base that gets richer with every source added and every question asked.
-
-The wiki is the product. Chat is just the interface.
-
-## Principles
-
-- **Raw is immutable.** Never modify files in `raw/`. They are the source of truth for error correction.
-- **Origin matters.** Pages with `origin: self-written` must never be overwritten by the LLM. Read them, reference them, but do not edit them.
-- **Session startup.** At the start of every session, read this file (CLAUDE.md), then `hot.md`, then `wiki/index.md`. This orients you to the wiki's current state.
-- **Commit after every ingest.** Use git to version every change. This enables rollback if an ingest goes wrong.
-
-## Operations
-
-### Ingest
-
-When a new source is added to `raw/`:
-
-1. Read the source file
-2. Discuss key takeaways with the user
-3. Create a source summary page: `python scripts/create_page.py . source "<title>" --raw-path "raw/<path>"`, then edit to fill content
-4. For each new concept or entity mentioned, create a page: `python scripts/create_page.py . <type> "<name>"`, then edit to fill content
-5. Update all existing concept/entity/synthesis pages that are relevant (cascade update)
-6. Update `wiki/index.md` — add new pages under the correct section
-7. Append log entry to `log/{{date}}.md`
-8. Update `hot.md` with the latest activity
-
-A single source may touch 10-15 wiki pages. That is expected.
-
-**Quality gate**: Start with 3-5 sources, review every generated page carefully, and fix this schema before scaling up.
-
-### Query
-
-When answering questions:
-
-1. Read `hot.md` first (~500 words, usually enough to orient)
-2. Read `wiki/index.md` to find relevant pages
-3. Drill into specific pages for details
-4. Synthesize an answer with `[[page-name]]` citations
-
-Good answers can be saved back as new synthesis pages.
-
-### Lint
-
-Run periodically:
-
-1. `python scripts/lint_wiki.py .` — structural checks
-2. Review pages for contradictions, missing cross-references, undocumented concepts
-
-Generate a lint report at `wiki/meta/lint-report-{{date}}.md`. Wait for user confirmation before making changes.
-
-### Audit
-
-When the user spots an error:
-
-1. User drops a feedback file in `audit/`
-2. Run `python scripts/audit_review.py . --open` to see pending feedback
-3. Check correction against the original `raw/` source
-4. Fix the wiki page and any related pages
-5. Move processed audit to `audit/resolved/`
-6. Log the correction
-
-**When audit feedback conflicts with raw source, raw source wins.**
-
-## Naming Conventions
-
-- **Concept pages** (`wiki/concepts/`): Title Case noun phrases. File: `Attention-Mechanism.md`
-- **Entity pages** (`wiki/entities/`): Proper names. File: `OpenAI.md`
-- **Source pages** (`wiki/sources/`): kebab-case slug. File: `attention-is-all-you-need.md`
-- **Synthesis pages** (`wiki/syntheses/`): Descriptive title. File: `transformer-vs-rnn-comparison.md`
-- All pages require YAML frontmatter with: `title`, `type`, `summary`, `tags`, `sources`, `origin`, `status`, `created`, `updated`
-
-## Page Status Lifecycle
-
-- `seed` — just created, minimal content
-- `developing` — has substantive content from multiple sources
-- `mature` — well-covered, cross-referenced, unlikely to change significantly
-- `evergreen` — stable knowledge, periodically reviewed
-
-## Notes for the LLM
-
-- Depth: adjust based on question — brief for overviews, detailed for deep-dives
-- When uncertain about a fact, flag it rather than guessing
-- Never overwrite pages with `origin: self-written`
-- Diagrams: use Mermaid syntax; formulas: use KaTeX
-"""
 
 
 def _write(root: Path, path: str, content: str) -> None:

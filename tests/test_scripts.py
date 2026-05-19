@@ -60,6 +60,12 @@ class TestFillFmField:
         assert 'type: concept' in result
         assert 'title: "Test"' in result
 
+    def test_does_not_match_body(self):
+        content = "---\ntitle: \"\"\n---\ntitle: should not change"
+        result = fill_fm_field(content, "title", '"Replaced"')
+        assert 'title: "Replaced"' in result
+        assert "title: should not change" in result
+
 
 # --- fill_template ---
 
@@ -171,6 +177,40 @@ class TestCreatePageCLI:
         assert proc2.returncode != 0
         assert "already exists" in proc2.stderr
 
+    def test_synthesis_fallback_fixes_type(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "syntheses").mkdir(parents=True)
+        (wiki / "_templates" / "concept.md").write_text(
+            '---\ntitle: ""\ntype: concept\n---\n# {title}\n', encoding="utf-8"
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "synthesis", "Syn Test"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        out = wiki / "wiki" / "syntheses" / "syn-test.md"
+        assert out.exists()
+        content = out.read_text(encoding="utf-8")
+        assert "type: synthesis" in content
+
+    def test_raw_path_warning(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "sources").mkdir(parents=True)
+        (wiki / "_templates" / "source.md").write_text(
+            '---\ntitle: ""\ntype: source\nraw_path: ""\n---\n# {title}\n', encoding="utf-8"
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "source", "S1",
+             "--raw-path", "raw/articles/nonexistent.md"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        assert "WARNING" in proc.stderr
+
 
 # --- scaffold + lint integration ---
 
@@ -203,3 +243,79 @@ class TestScaffoldAndLint:
             capture_output=True, text=True,
         )
         assert "Traceback" not in proc.stderr
+
+    def test_lint_exits_0_on_healthy_wiki(self, tmp_path):
+        wiki = tmp_path / "mywiki"
+        scaffold = REPO_ROOT / "scripts" / "scaffold.py"
+        subprocess.run(
+            [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+
+    def test_lint_exits_1_on_dead_wikilink(self, tmp_path):
+        wiki = tmp_path / "mywiki"
+        scaffold = REPO_ROOT / "scripts" / "scaffold.py"
+        subprocess.run(
+            [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        (wiki / "wiki" / "concepts" / "broken.md").write_text(
+            "---\ntitle: Broken\ntype: concept\n---\n[[NonExistentPage]]\n",
+            encoding="utf-8",
+        )
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 1
+        assert "Dead wikilinks" in proc.stdout
+
+
+# --- audit_review ---
+
+class TestAuditReview:
+    def test_audit_review_runs(self, tmp_path):
+        wiki = tmp_path / "mywiki"
+        scaffold = REPO_ROOT / "scripts" / "scaffold.py"
+        subprocess.run(
+            [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        # Write a sample audit file
+        (wiki / "audit" / "audit-001.md").write_text(
+            '---\nid: audit-001\ntarget: wiki/concepts/test.md\n'
+            'target_lines: [1, 5]\nanchor_before: ""\nanchor_text: "test"\n'
+            'anchor_after: ""\nseverity: warn\nauthor: user\n'
+            'source: manual\ncreated: 2026-05-19\nstatus: open\n---\n'
+            '# Comment\n\nThis is wrong.',
+            encoding="utf-8",
+        )
+        script = REPO_ROOT / "scripts" / "audit_review.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "--open"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        assert "audit-001" in proc.stdout
+
+    def test_audit_review_no_files(self, tmp_path):
+        wiki = tmp_path / "mywiki"
+        scaffold = REPO_ROOT / "scripts" / "scaffold.py"
+        subprocess.run(
+            [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        script = REPO_ROOT / "scripts" / "audit_review.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "--open"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        assert "No open audit files found" in proc.stdout

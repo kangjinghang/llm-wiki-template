@@ -13,9 +13,10 @@ Checks:
   2. Orphan pages — wiki pages with no inbound links
   3. Missing index entries — wiki pages not listed in wiki/index.md
   4. Unlinked concepts — terms mentioned 3+ times but lacking their own page
-  5. log/ shape — every file matches YYYYMMDD.md and has the right H1
+  5. log/ shape — every file matches YYYY-MM-DD.md and has the right H1
   6. audit/ shape — every audit/*.md parses as a valid AuditEntry
   7. Audit targets — every open audit's `target` file must exist
+  8. raw_path existence — source pages' raw_path must point to a real file
 
 Exit codes:
   0 — no issues found
@@ -210,7 +211,7 @@ def lint(root: str) -> int:
                 continue
             m = LOG_FILENAME_RE.match(p.name)
             if not m:
-                log_issues.append(f"   {p.relative_to(root_path)} — filename doesn't match YYYYMMDD.md")
+                log_issues.append(f"   {p.relative_to(root_path)} — filename doesn't match YYYY-MM-DD.md")
                 continue
             y, mo, d = m.groups()
             iso = f"{y}-{mo}-{d}"
@@ -290,6 +291,25 @@ def lint(root: str) -> int:
         issues += len(missing_targets)
     elif audit_targets_to_check:
         print("✅ All open-audit targets exist")
+
+    # ── Pass 8: raw_path existence ──────────────────────────────────────────
+    missing_raw: list[tuple[str, str]] = []
+    for md_file in all_wiki_files:
+        text = md_file.read_text(encoding="utf-8")
+        fm = parse_frontmatter(text)
+        if fm and fm.get("raw_path"):
+            raw_rel = fm["raw_path"].strip('"').strip("'")
+            if raw_rel and not (root_path / raw_rel).exists():
+                missing_raw.append(
+                    (str(md_file.relative_to(root_path)), raw_rel)
+                )
+    if missing_raw:
+        print(f"\n🟡 Source pages with missing raw_path ({len(missing_raw)}):")
+        for page, raw in missing_raw:
+            print(f"   {page} → {raw}")
+        issues += len(missing_raw)
+    else:
+        print("✅ All source raw_path references exist")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")

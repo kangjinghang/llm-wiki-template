@@ -91,9 +91,13 @@ def fill_template(
 
 
 def fill_fm_field(content: str, field: str, value: str) -> str:
-    """Replace a frontmatter field value. Only matches inside the YAML block."""
-    pattern = rf"(^{field}:\s*).*?$"
-    return re.sub(pattern, rf"\g<1>{value}", content, count=1, flags=re.MULTILINE)
+    """Replace a frontmatter field value. Only matches inside the --- YAML block."""
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return content
+    fm = parts[1]
+    fm = re.sub(rf"(^{field}:\s*).*?$", rf"\g<1>{value}", fm, count=1, flags=re.MULTILINE)
+    return "---" + fm + "---" + parts[2]
 
 
 def type_to_dir(page_type: str) -> str:
@@ -131,14 +135,17 @@ def main() -> int:
         print(f"ERROR: _templates/ directory not found (tried {template_dir})", file=sys.stderr)
         return 1
 
-    # Load template
+    # Load template (synthesis falls back to concept template)
     template = load_template(template_dir, args.page_type)
+    if template is None and args.page_type == "synthesis":
+        template = load_template(template_dir, "concept")
     if template is None:
-        if args.page_type == "synthesis":
-            template = load_template(template_dir, "concept")
-        if template is None:
-            print(f"ERROR: No template found for type '{args.page_type}'", file=sys.stderr)
-            return 1
+        print(f"ERROR: No template found for type '{args.page_type}'", file=sys.stderr)
+        return 1
+
+    # Fix type field when synthesis fell back to concept template
+    if args.page_type == "synthesis":
+        template = fill_fm_field(template, "type", "synthesis")
 
     # Determine output path
     slug = slugify(args.title)
@@ -155,6 +162,12 @@ def main() -> int:
     tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
     sources = [s.strip() for s in args.sources.split(",")] if args.sources else []
     today = date.today().isoformat()
+
+    # Validate raw_path exists
+    if args.raw_path:
+        raw_full = wiki_root / args.raw_path
+        if not raw_full.exists():
+            print(f"WARNING: raw_path does not exist: {raw_full}", file=sys.stderr)
 
     # Fill template
     content = fill_template(template, args.title, args.title_zh, today, tags, sources, args.raw_path)
