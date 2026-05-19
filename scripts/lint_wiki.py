@@ -132,11 +132,13 @@ def load_tag_taxonomy(root_path: Path) -> set[str] | None:
                 continue
             if in_taxonomy and stripped.startswith("- **"):
                 import re as _re
-                m = _re.match(r"-\s+\*\*([^*]+)\*\*", stripped)
+                m = _re.match(r"-\s+\*\*[^*]+\*\*:\s*(.+)", stripped)
                 if m:
                     for tag in m.group(1).split(","):
-                        tags.add(tag.strip().lower())
-            elif in_taxonomy and stripped.startswith("- ") and not stripped.startswith("- ["):
+                        t = tag.strip().rstrip(",")
+                        if t:
+                            tags.add(t.lower())
+            elif in_taxonomy and stripped.startswith("- ") and not stripped.startswith("- [") and not stripped.startswith("- **"):
                 tag = stripped[2:].strip().rstrip(",")
                 if tag and not tag.startswith("*") and not tag.startswith("["):
                     tags.add(tag.lower())

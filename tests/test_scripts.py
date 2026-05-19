@@ -238,12 +238,12 @@ class TestScaffoldAndLint:
         scaffold = REPO_ROOT / "scripts" / "scaffold.py"
         subprocess.run(
             [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         lint = REPO_ROOT / "scripts" / "lint_wiki.py"
         proc = subprocess.run(
             [sys.executable, str(lint), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert "Traceback" not in proc.stderr
 
@@ -252,12 +252,12 @@ class TestScaffoldAndLint:
         scaffold = REPO_ROOT / "scripts" / "scaffold.py"
         subprocess.run(
             [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         lint = REPO_ROOT / "scripts" / "lint_wiki.py"
         proc = subprocess.run(
             [sys.executable, str(lint), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 0
 
@@ -266,7 +266,7 @@ class TestScaffoldAndLint:
         scaffold = REPO_ROOT / "scripts" / "scaffold.py"
         subprocess.run(
             [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         (wiki / "wiki" / "concepts" / "broken.md").write_text(
             "---\ntitle: Broken\ntype: concept\n---\n[[NonExistentPage]]\n",
@@ -275,7 +275,7 @@ class TestScaffoldAndLint:
         lint = REPO_ROOT / "scripts" / "lint_wiki.py"
         proc = subprocess.run(
             [sys.executable, str(lint), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 1
         assert "Dead wikilinks" in proc.stdout
@@ -289,7 +289,7 @@ class TestAuditReview:
         scaffold = REPO_ROOT / "scripts" / "scaffold.py"
         subprocess.run(
             [sys.executable, str(scaffold), str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         # Write a sample audit file
         (wiki / "audit" / "audit-001.md").write_text(
@@ -303,7 +303,7 @@ class TestAuditReview:
         script = REPO_ROOT / "scripts" / "audit_review.py"
         proc = subprocess.run(
             [sys.executable, str(script), str(wiki), "--open"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 0
         assert "audit-001" in proc.stdout
@@ -322,3 +322,265 @@ class TestAuditReview:
         )
         assert proc.returncode == 0
         assert "No open audit files found" in proc.stdout
+
+
+# --- load_tag_taxonomy ---
+
+class TestLoadTagTaxonomy:
+    @staticmethod
+    def _get_loader():
+        from lint_wiki import load_tag_taxonomy
+        return load_tag_taxonomy
+
+    def test_loads_taxonomy_from_claude_md(self, tmp_path):
+        loader = self._get_loader()
+        (tmp_path / "CLAUDE.md").write_text(
+            "## Tag Taxonomy\n\n"
+            "- **Topics**: deep-learning, nlp\n"
+            "- **Methods**: training\n\n"
+            "## Other Section\n",
+            encoding="utf-8",
+        )
+        result = loader(tmp_path)
+        assert result is not None
+        assert "deep-learning" in result
+        assert "nlp" in result
+        assert "training" in result
+
+    def test_loads_taxonomy_from_schema_subdir(self, tmp_path):
+        loader = self._get_loader()
+        (tmp_path / "_schema").mkdir()
+        (tmp_path / "_schema" / "CLAUDE.md").write_text(
+            "## Tag Taxonomy\n\n- deep-learning\n- nlp\n\n## Next\n",
+            encoding="utf-8",
+        )
+        result = loader(tmp_path)
+        assert result is not None
+        assert "deep-learning" in result
+
+    def test_returns_none_when_no_taxonomy(self, tmp_path):
+        loader = self._get_loader()
+        (tmp_path / "CLAUDE.md").write_text("## Just a doc\n\nNo taxonomy here.\n", encoding="utf-8")
+        result = loader(tmp_path)
+        assert result is None
+
+    def test_returns_none_when_no_schema_file(self, tmp_path):
+        loader = self._get_loader()
+        result = loader(tmp_path)
+        assert result is None
+
+    def test_extracts_bold_prefixed_tags(self, tmp_path):
+        loader = self._get_loader()
+        (tmp_path / "CLAUDE.md").write_text(
+            "## Tag Taxonomy\n\n"
+            "- **Topics**: deep-learning, nlp, computer-vision\n"
+            "- **Meta**: comparison, prediction\n\n"
+            "## Writing Style\n",
+            encoding="utf-8",
+        )
+        result = loader(tmp_path)
+        assert result is not None
+        assert "computer-vision" in result
+        assert "prediction" in result
+
+    def test_tags_are_lowercase(self, tmp_path):
+        loader = self._get_loader()
+        (tmp_path / "CLAUDE.md").write_text(
+            "## Tag Taxonomy\n\n- Deep-Learning\n- NLP\n\n## End\n",
+            encoding="utf-8",
+        )
+        result = loader(tmp_path)
+        assert result is not None
+        assert "deep-learning" in result
+        assert "nlp" in result
+        assert "Deep-Learning" not in result
+
+
+# --- Pass 9: tag taxonomy lint integration ---
+
+class TestTagTaxonomyLint:
+    def test_flags_invalid_tag(self, tmp_path):
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        # Create a minimal wiki with a CLAUDE.md that has a taxonomy
+        (tmp_path / "wiki" / "concepts").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        (tmp_path / "CLAUDE.md").write_text(
+            "## Tag Taxonomy\n\n- deep-learning\n- nlp\n\n## End\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
+        # Page with a tag NOT in taxonomy
+        (tmp_path / "wiki" / "concepts" / "test.md").write_text(
+            '---\ntitle: Test\ntype: concept\ntags: [deep-learning, fake-tag]\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 1
+        assert "fake-tag" in proc.stdout
+
+    def test_passes_with_valid_tags(self, tmp_path):
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "concepts").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        (tmp_path / "CLAUDE.md").write_text(
+            "## Tag Taxonomy\n\n- deep-learning\n- nlp\n\n## End\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "test.md").write_text(
+            '---\ntitle: Test\ntype: concept\ntags: [deep-learning, nlp]\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
+
+    def test_skips_when_no_taxonomy(self, tmp_path):
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "concepts").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        (tmp_path / "CLAUDE.md").write_text("## Just Docs\n\nNo taxonomy.\n", encoding="utf-8")
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "test.md").write_text(
+            '---\ntitle: Test\ntype: concept\ntags: [anything]\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Should skip tag check entirely (no taxonomy) — other issues may exist but not tag-related
+        assert "No tag taxonomy found" in proc.stdout
+
+
+# --- Pass 10: stale page lint integration ---
+
+class TestStalePageLint:
+    def test_flags_past_review_date(self, tmp_path):
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "concepts").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "stale.md").write_text(
+            '---\ntitle: Stale\ntype: concept\nreview_by: "2020-01-01"\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 1
+        assert "Pages past review date" in proc.stdout
+
+    def test_passes_with_future_review_date(self, tmp_path):
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "concepts").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[fresh]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "fresh.md").write_text(
+            '---\ntitle: Fresh\ntype: concept\nreview_by: "2099-12-31"\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
+
+    def test_passes_with_empty_review_by(self, tmp_path):
+        lint = REPO_ROOT / "scripts" / "lint_wiki.py"
+        (tmp_path / "wiki" / "concepts").mkdir(parents=True)
+        (tmp_path / "log").mkdir()
+        (tmp_path / "audit").mkdir()
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[empty]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "empty.md").write_text(
+            '---\ntitle: Empty\ntype: concept\nreview_by: ""\n---\nBody\n',
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(lint), str(tmp_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
+
+
+# --- --compute-hash integration ---
+
+class TestComputeHash:
+    def test_adds_raw_hash_to_frontmatter(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "sources").mkdir(parents=True)
+        (wiki / "raw" / "articles").mkdir(parents=True)
+        # Create a raw file to hash
+        raw_content = "This is the raw source content."
+        (wiki / "raw" / "articles" / "test.md").write_text(raw_content, encoding="utf-8")
+        (wiki / "_templates" / "source.md").write_text(
+            '---\ntitle: ""\ntype: source\nraw_path: ""\n---\n# {title}\n',
+            encoding="utf-8",
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "source", "Test Source",
+             "--raw-path", "raw/articles/test.md", "--compute-hash"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        out = wiki / "wiki" / "sources" / "test-source.md"
+        assert out.exists()
+        content = out.read_text(encoding="utf-8")
+        assert "raw_hash:" in content
+        # Verify the hash is correct
+        import hashlib
+        expected_hash = hashlib.sha256(raw_content.encode("utf-8")).hexdigest()
+        assert expected_hash in content
+
+    def test_no_hash_without_flag(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "sources").mkdir(parents=True)
+        (wiki / "raw" / "articles").mkdir(parents=True)
+        (wiki / "raw" / "articles" / "test.md").write_text("content", encoding="utf-8")
+        (wiki / "_templates" / "source.md").write_text(
+            '---\ntitle: ""\ntype: source\nraw_path: ""\n---\n# {title}\n',
+            encoding="utf-8",
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "source", "No Hash",
+             "--raw-path", "raw/articles/test.md"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        out = wiki / "wiki" / "sources" / "no-hash.md"
+        content = out.read_text(encoding="utf-8")
+        assert "raw_hash:" not in content
+
+    def test_no_hash_when_raw_path_missing(self, tmp_path):
+        wiki = tmp_path / "wiki"
+        (wiki / "_templates").mkdir(parents=True)
+        (wiki / "wiki" / "sources").mkdir(parents=True)
+        (wiki / "_templates" / "source.md").write_text(
+            '---\ntitle: ""\ntype: source\nraw_path: ""\n---\n# {title}\n',
+            encoding="utf-8",
+        )
+        script = REPO_ROOT / "scripts" / "create_page.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), str(wiki), "source", "Missing Raw",
+             "--raw-path", "raw/articles/nonexistent.md", "--compute-hash"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        out = wiki / "wiki" / "sources" / "missing-raw.md"
+        content = out.read_text(encoding="utf-8")
+        assert "raw_hash:" not in content
