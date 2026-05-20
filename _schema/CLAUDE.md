@@ -51,6 +51,7 @@ When a new source is added to `raw/`:
 7. Update `wiki/index.md` — add new pages under the correct section
 8. Append a log entry to `log/{date}.md`
 9. Update `hot.md` with the latest activity
+10. Update `wiki/overview.md` — revise the narrative overview to reflect new content. Ensure every new concept is mentioned in context with `[[wikilink]]`. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 
@@ -194,6 +195,7 @@ When deciding whether to create, update, split, or archive a page, follow these 
 - **Formulas**: use **KaTeX** (`$inline$` or `$$block$$`)
 - **Provenance markers**: on pages that synthesize 3+ sources, append `^[raw/path/to/source.md]` at the end of paragraphs whose claims come from a specific source. This lets readers trace each claim without re-reading the raw file. Single-source pages don't need this — the `sources` frontmatter is sufficient.
 - **Managed blocks**: never edit content between `<!-- human:start -->` and `<!-- human:end -->` markers. These sections contain the user's own notes. The LLM may write above and below, but must preserve these blocks exactly as they are.
+- **Inline wikilinks**: The first mention of any concept, entity, or source that has its own wiki page MUST be a `[[wikilink]]` embedded in the prose — not just listed in Related Pages. This applies to ALL page types (source, concept, entity, synthesis, overview). Related Pages sections supplement inline links, they do not replace them.
 
 ## Notes for the LLM
 

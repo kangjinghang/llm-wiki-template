@@ -182,6 +182,21 @@ Follow the audit workflow defined in CLAUDE.md:
     _write(root_path, "wiki/index.md", index_md)
     print("Created wiki/index.md")
 
+    # --- wiki/overview.md ---
+    overview = root_path / "wiki" / "overview.md"
+    overview.write_text(
+        f"# {title} 知识库概览\n\n"
+        f"> 这篇概览在每次 ingest 后自动更新，将整个知识库的核心发现串联为一篇连贯叙事。\n\n"
+        f"## 核心主题\n\n"
+        f"<!-- 叙述本知识库关注的 2-3 个核心研究方向 -->\n\n"
+        f"## 关键发现\n\n"
+        f"<!-- 按 Source 归纳最重要的结论 -->\n\n"
+        f"## 开放问题\n\n"
+        f"<!-- 从 questions.md 汇总 -->\n",
+        encoding="utf-8",
+    )
+    print(f"  Created {overview}")
+
     # hot.md
     hot_md = f"""# Hot Cache
 

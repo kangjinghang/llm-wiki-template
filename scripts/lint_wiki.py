@@ -209,11 +209,11 @@ def lint(root: str) -> int:
         print("✅ No dead wikilinks")
 
     # ── Pass 2: orphan pages ────────────────────────────────────────────────
-    skip_orphan = {"index"}
+    skip_orphan = {"index", "overview"}
     orphans = [
         p for p in all_wiki_files
         if p.stem not in inbound and p.stem not in skip_orphan
-        and p.parent != wiki_path  # skip index.md at root
+        and p.parent != wiki_path  # skip index.md, overview.md at root
     ]
     if orphans:
         print(f"\n🟡 Orphan pages ({len(orphans)}) — no inbound wikilinks:")
@@ -226,9 +226,11 @@ def lint(root: str) -> int:
     # ── Pass 3: missing index entries ───────────────────────────────────────
     if index_path.exists():
         index_text = index_path.read_text(encoding="utf-8")
+        overview_path = wiki_path / "overview.md"
         not_in_index = [
             p for p in all_wiki_files
             if p != index_path
+            and p != overview_path
             and f"[[{p.stem}]]" not in index_text
             and str(p.relative_to(wiki_path).with_suffix("")) not in index_text
         ]
