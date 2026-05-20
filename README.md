@@ -100,6 +100,9 @@ python scripts/create_page.py . source "Transformer Paper" --raw-path "raw/paper
 6. Audit shape — every `audit/*.md` has valid YAML frontmatter
 7. Audit targets — every open audit's `target` file exists
 8. raw_path existence — source pages' `raw_path` must point to a real file
+9. Tag taxonomy — tags must be declared in CLAUDE.md before use
+10. Stale pages — pages with `review_by` date in the past
+11. Filename case — wiki page filenames must be all lowercase
 9. Tag taxonomy — tags on wiki pages must appear in the CLAUDE.md taxonomy (if defined)
 10. Stale pages — pages with review_by date in the past
 

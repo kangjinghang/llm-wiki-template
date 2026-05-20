@@ -27,7 +27,7 @@ When working inside this template repo, your role is **template maintenance**, n
 |--------|---------|
 | `scripts/scaffold.py` | Bootstrap a new wiki — copies scripts + templates, generates CLAUDE.md from `_schema/` |
 | `scripts/create_page.py` | Create a wiki page with correct frontmatter from a template |
-| `scripts/lint_wiki.py` | 7-check health check for a wiki instance |
+| `scripts/lint_wiki.py` | 11-check health check for a wiki instance |
 | `scripts/audit_review.py` | List and group open audit feedback by target file |
 
 ## Templates

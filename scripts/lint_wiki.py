@@ -19,6 +19,7 @@ Checks:
   8. raw_path existence — source pages' raw_path must point to a real file
   9. Tag taxonomy — tags on wiki pages must appear in the CLAUDE.md taxonomy (if defined)
   10. Stale pages — pages with review_by date in the past
+  11. Filename case — wiki page filenames must be all lowercase
 
 Exit codes:
   0 — no issues found
@@ -442,6 +443,19 @@ def lint(root: str) -> int:
         issues += len(stale_pages)
     else:
         print("✅ No pages past review date")
+
+    # ── Pass 11: filename case ────────────────────────────────────────────
+    uppercase_names: list[str] = []
+    for md_file in all_wiki_files:
+        if md_file.stem != md_file.stem.lower():
+            uppercase_names.append(str(md_file.relative_to(root_path)))
+    if uppercase_names:
+        print(f"\n🟡 Uppercase filenames ({len(uppercase_names)}):")
+        for name in uppercase_names:
+            print(f"   {name}")
+        issues += len(uppercase_names)
+    else:
+        print("✅ All filenames are lowercase")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")

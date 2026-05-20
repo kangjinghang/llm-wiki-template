@@ -4,7 +4,6 @@ title_zh: ""
 type: source
 summary: ""
 tags: []
-sources: []
 origin: agent-compiled
 status: seed
 created: {date}

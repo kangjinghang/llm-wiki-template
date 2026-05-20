@@ -679,3 +679,65 @@ class TestReviewBy:
         out = wiki / "wiki" / "concepts" / "no-review.md"
         content = out.read_text(encoding="utf-8")
         assert 'review_by: ""' in content
+
+
+# --- naming convention lint ---
+
+class TestNamingConventionLint:
+    def test_flags_uppercase_filename(self, tmp_path):
+        """Pages with uppercase characters in filename should be flagged."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        # Create a page with uppercase filename (LLM might do this)
+        (wiki / "wiki" / "concepts" / "ESP-Factor.md").write_text(
+            "---\ntitle: ESP Factor\ntype: concept\n---\nContent\n",
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 1
+        assert "naming" in proc.stdout.lower() or "uppercase" in proc.stdout.lower() or "case" in proc.stdout.lower()
+
+    def test_passes_all_lowercase(self, tmp_path):
+        """All-lowercase filenames should pass naming check."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        (wiki / "wiki" / "concepts" / "esp-factor.md").write_text(
+            "---\ntitle: ESP Factor\ntype: concept\n---\nContent\n",
+            encoding="utf-8",
+        )
+        # Add to index to avoid orphan/missing-index issues
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "*(none yet)*", "- [[esp-factor]]", 1
+            ),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+
+
+# --- source template: sources field should be absent ---
+
+class TestSourceTemplateNoSources:
+    def test_source_template_has_no_sources_field(self):
+        template = (REPO_ROOT / "_templates" / "source.md").read_text(encoding="utf-8")
+        # source pages use raw_path, not sources — the field should not be in the template
+        fm_section = template.split("---")[1]
+        assert "sources" not in fm_section or "sources: []" not in fm_section
+        # But raw_path MUST be there
+        assert "raw_path" in fm_section
