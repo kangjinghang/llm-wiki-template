@@ -49,6 +49,7 @@ my-topic/
 │   └── archive/
 ├── wiki/                ← LLM-generated markdown (the wiki itself)
 │   ├── index.md
+│   ├── overview.md
 │   ├── sources/
 │   ├── concepts/
 │   ├── entities/
@@ -67,7 +68,7 @@ my-topic/
 |--------|---------|-------|
 | `scaffold.py` | Bootstrap a new wiki | `python scripts/scaffold.py <path> "<title>"` |
 | `create_page.py` | Create a wiki page with correct frontmatter | `python scripts/create_page.py <root> <type> "<title>" [options]` |
-| `lint_wiki.py` | Health check (10 structural checks) | `python scripts/lint_wiki.py <root>` |
+| `lint_wiki.py` | Health check (14 structural checks) | `python scripts/lint_wiki.py <root>` |
 | `audit_review.py` | List and group open audit feedback | `python scripts/audit_review.py <root> [--open\|--resolved\|--all]` |
 
 ### create_page.py options
@@ -103,8 +104,8 @@ python scripts/create_page.py . source "Transformer Paper" --raw-path "raw/paper
 9. Tag taxonomy — tags must be declared in CLAUDE.md before use
 10. Stale pages — pages with `review_by` date in the past
 11. Filename case — wiki page filenames must be all lowercase
-9. Tag taxonomy — tags on wiki pages must appear in the CLAUDE.md taxonomy (if defined)
-10. Stale pages — pages with review_by date in the past
+12. overview.md existence — wiki must have a narrative overview page
+13. Inline wikilink density — pages with ≥50 words of body content must have at least 1 inline `[[wikilink]]`
 
 ## Page Templates
 
