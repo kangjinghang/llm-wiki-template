@@ -471,6 +471,22 @@ def lint(root: str) -> int:
     else:
         print("✅ All filenames are lowercase")
 
+    # ── Pass 12: source pages should not have sources field ────────────────
+    source_with_sources: list[str] = []
+    for md_file in all_wiki_files:
+        if md_file.parent.name == "sources":
+            text = md_file.read_text(encoding="utf-8")
+            fm = parse_frontmatter(text)
+            if fm and fm.get("sources") is not None:
+                source_with_sources.append(str(md_file.relative_to(root_path)))
+    if source_with_sources:
+        print(f"\n🟡 Source pages with sources field ({len(source_with_sources)}):")
+        for page in source_with_sources:
+            print(f"   {page}")
+        issues += len(source_with_sources)
+    else:
+        print("✅ No source pages with sources field")
+
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")
     if issues == 0:

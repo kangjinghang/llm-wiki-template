@@ -129,10 +129,10 @@ wiki-root/
 
 ## Naming Conventions
 
-- **Concept pages** (`wiki/concepts/`): Title Case noun phrases → `Attention-Mechanism.md`
-- **Entity pages** (`wiki/entities/`): Proper names → `OpenAI.md`
-- **Source pages** (`wiki/sources/`): kebab-case slug → `attention-is-all-you-need.md`
-- **Synthesis pages** (`wiki/syntheses/`): Descriptive title → `transformer-vs-rnn-comparison.md`
+- **Concept pages** (`wiki/concepts/`): lowercase with hyphens → `attention-mechanism.md`
+- **Entity pages** (`wiki/entities/`): lowercase → `openai.md`
+- **Source pages** (`wiki/sources/`): lowercase slug → `attention-is-all-you-need.md`
+- **Synthesis pages** (`wiki/syntheses/`): lowercase descriptive slug → `transformer-vs-rnn-comparison.md`
 
 All pages require YAML frontmatter with: `title`, `type`, `summary`, `tags`, `sources`, `origin`, `status`, `created`, `updated`.
 

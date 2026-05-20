@@ -775,3 +775,60 @@ class TestRawHashPresence:
         )
         assert proc.returncode == 1
         assert "raw_hash" in proc.stdout.lower()
+
+
+class TestSourcePagesNoSourcesField:
+    def test_flags_source_page_with_sources_field(self, tmp_path):
+        """Source pages should not have a sources field in frontmatter."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        # Create a source page with sources field (should be flagged)
+        page = wiki / "wiki" / "sources" / "bad-source.md"
+        page.write_text(
+            '---\ntitle: "Bad"\ntype: source\nsources: []\n---\nContent\n',
+            encoding="utf-8",
+        )
+        # Add to index
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace("*(none yet)*", "- [[bad-source]]", 1),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 1
+        assert "source" in proc.stdout.lower() and "sources" in proc.stdout.lower()
+
+    def test_passes_source_page_without_sources_field(self, tmp_path):
+        """Source pages without sources field should pass."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        # Create a source page without sources field (correct)
+        raw = wiki / "raw" / "articles" / "good.md"
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        raw.write_text("Content", encoding="utf-8")
+        page = wiki / "wiki" / "sources" / "good-source.md"
+        page.write_text(
+            '---\ntitle: "Good"\ntype: source\nraw_path: "raw/articles/good.md"\n---\nContent\n',
+            encoding="utf-8",
+        )
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace("*(none yet)*", "- [[good-source]]", 1),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert "should not have" not in proc.stdout.lower()
