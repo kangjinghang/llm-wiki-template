@@ -44,6 +44,7 @@ def scaffold(root: str, title: str) -> None:
         "audit/resolved",
         "scripts",
         "_templates",
+        ".claude/commands",
     ]
 
     for d in dirs:
@@ -69,12 +70,53 @@ def scaffold(root: str, title: str) -> None:
 
     print("Copied scripts and templates")
 
-    # .gitignore
+    # .gitignore (keep .claude/commands/ tracked but ignore the rest)
     gitignore = """.obsidian/
-.claude/
+.claude/*
+!.claude/commands/
 *.tmp
 """
     _write(root_path, ".gitignore", gitignore)
+
+    # Slash commands for Claude Code
+    _write(root_path, ".claude/commands/ingest.md", f"""Ingest the source file at $ARGUMENTS into the wiki.
+
+Follow the ingest workflow defined in CLAUDE.md:
+1. Read the source file in full
+2. Present a structured summary (core thesis, new concepts/entities, relations to existing pages, claims to verify, proposed actions)
+3. Wait for my confirmation before creating any pages
+4. Create source summary page, concept/entity pages, cascade updates
+5. Update wiki/index.md, log/{{date}}.md, hot.md
+""")
+    _write(root_path, ".claude/commands/query.md", f"""Answer the following question using the wiki: $ARGUMENTS
+
+Follow the query workflow defined in CLAUDE.md:
+1. Read hot.md first to orient
+2. Read wiki/index.md to find relevant pages
+3. Drill into specific pages for details
+4. Synthesize an answer with [[page-name]] citations
+5. If the answer is worth preserving, suggest filing it back as a synthesis page
+""")
+    _write(root_path, ".claude/commands/lint.md", f"""Run a full lint check on the wiki and report results.
+
+```
+python scripts/lint_wiki.py .
+```
+
+Review the output. If there are issues, propose fixes and wait for confirmation before making changes.
+""")
+    _write(root_path, ".claude/commands/audit.md", f"""Process open audit feedback in the wiki.
+
+If $ARGUMENTS is provided, focus on that specific audit file. Otherwise process all open audits.
+
+Follow the audit workflow defined in CLAUDE.md:
+1. Run `python scripts/audit_review.py . --open` to see pending feedback
+2. Read each audit item and check the correction against the original raw/ source
+3. Fix the wiki page and any related pages
+4. Move the processed audit file to audit/resolved/
+5. Log the correction in log/{{date}}.md
+""")
+    print("Created slash commands (.claude/commands/)")
 
     # CLAUDE.md — generated from _schema/CLAUDE.md if available, else inline
     schema_src = Path(__file__).resolve().parent.parent / "_schema" / "CLAUDE.md"
