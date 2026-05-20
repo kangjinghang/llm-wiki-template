@@ -871,3 +871,134 @@ class TestOverviewExists:
             capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 0
+
+
+# --- inline wikilink density ---
+
+class TestInlineWikilinkDensity:
+    def test_flags_page_with_no_inline_links(self, tmp_path):
+        """A concept page with wikilinks only in Related Pages should be flagged."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Create target pages so no dead links are reported
+        (wiki / "wiki" / "concepts" / "other-concept.md").write_text(
+            '---\ntitle: "Other"\ntype: concept\n---\nStub\n', encoding="utf-8",
+        )
+        (wiki / "wiki" / "entities" / "another-entity.md").write_text(
+            '---\ntitle: "Entity"\ntype: entity\n---\nStub\n', encoding="utf-8",
+        )
+        (wiki / "wiki" / "sources" / "test-source.md").write_text(
+            '---\ntitle: "Source"\ntype: source\n---\nStub\n', encoding="utf-8",
+        )
+        # Create a concept page with wikilinks ONLY in Related Pages (body has none)
+        page = wiki / "wiki" / "concepts" / "test-concept.md"
+        page.write_text(
+            '---\n'
+            'title: "Test Concept"\n'
+            'title_zh: "测试概念"\n'
+            'type: concept\n'
+            'summary: "A test concept"\n'
+            'tags: []\n'
+            'sources:\n'
+            '  - "[[test-source]]"\n'
+            'origin: agent-compiled\n'
+            'status: developing\n'
+            'created: 2026-05-21\n'
+            'updated: 2026-05-21\n'
+            'review_by: ""\n'
+            '---\n\n'
+            '# Test Concept\n\n'
+            '## Definition\n\n'
+            'This is a concept about something important in the field. It relates to other things.\n\n'
+            '## How It Works\n\n'
+            'The mechanism involves multiple steps and requires careful analysis of the underlying data. '
+            'Furthermore, the approach leverages established methodologies to achieve consistent results '
+            'across different experimental conditions and validation scenarios.\n\n'
+            '## Applications\n\n'
+            'This concept has broad applications in practice. Researchers have demonstrated its effectiveness '
+            'in numerous studies and real-world deployments across multiple domains.\n\n'
+            '## Related Pages\n\n'
+            '- [[other-concept]]\n'
+            '- [[another-entity]]\n',
+            encoding="utf-8",
+        )
+        # Add all pages to index
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "*(none yet)*",
+                "- [[test-concept]]\n- [[other-concept]]\n- [[another-entity]]\n- [[test-source]]",
+                1
+            ),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 1
+        assert "inline" in proc.stdout.lower() or "wikilink density" in proc.stdout.lower()
+
+    def test_passes_page_with_inline_links(self, tmp_path):
+        """A concept page with inline wikilinks in body should pass."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Create target pages so no dead links are reported
+        (wiki / "wiki" / "concepts" / "other-concept.md").write_text(
+            '---\ntitle: "Other"\ntype: concept\n---\nStub\n', encoding="utf-8",
+        )
+        (wiki / "wiki" / "entities" / "another-entity.md").write_text(
+            '---\ntitle: "Entity"\ntype: entity\n---\nStub\n', encoding="utf-8",
+        )
+        (wiki / "wiki" / "sources" / "test-source.md").write_text(
+            '---\ntitle: "Source"\ntype: source\n---\nStub\n', encoding="utf-8",
+        )
+        page = wiki / "wiki" / "concepts" / "test-concept.md"
+        page.write_text(
+            '---\n'
+            'title: "Test Concept"\n'
+            'title_zh: "测试概念"\n'
+            'type: concept\n'
+            'summary: "A test concept"\n'
+            'tags: []\n'
+            'sources:\n'
+            '  - "[[test-source]]"\n'
+            'origin: agent-compiled\n'
+            'status: developing\n'
+            'created: 2026-05-21\n'
+            'updated: 2026-05-21\n'
+            'review_by: ""\n'
+            '---\n\n'
+            '# Test Concept\n\n'
+            '## Definition\n\n'
+            'This concept builds on [[other-concept]] and extends it.\n\n'
+            '## How It Works\n\n'
+            'The mechanism is related to [[another-entity]] in practice.\n\n'
+            '## Related Pages\n\n'
+            '- [[other-concept]]\n',
+            encoding="utf-8",
+        )
+        # Add all pages to index
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "*(none yet)*",
+                "- [[test-concept]]\n- [[other-concept]]\n- [[another-entity]]\n- [[test-source]]",
+                1
+            ),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Should pass — inline wikilinks exist in body
+        assert proc.returncode == 0
