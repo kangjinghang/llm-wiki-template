@@ -690,7 +690,7 @@ class TestNamingConventionLint:
         subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
              str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         # Create a page with uppercase filename (LLM might do this)
         (wiki / "wiki" / "concepts" / "ESP-Factor.md").write_text(
@@ -699,7 +699,7 @@ class TestNamingConventionLint:
         )
         proc = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 1
         assert "naming" in proc.stdout.lower() or "uppercase" in proc.stdout.lower() or "case" in proc.stdout.lower()
@@ -710,7 +710,7 @@ class TestNamingConventionLint:
         subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
              str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         (wiki / "wiki" / "concepts" / "esp-factor.md").write_text(
             "---\ntitle: ESP Factor\ntype: concept\n---\nContent\n",
@@ -726,7 +726,7 @@ class TestNamingConventionLint:
         )
         proc = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 0
 
@@ -752,7 +752,7 @@ class TestRawHashPresence:
         subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
              str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         # Create a source page with raw_path but no raw_hash
         raw = wiki / "raw" / "articles" / "test.md"
@@ -771,7 +771,7 @@ class TestRawHashPresence:
         )
         proc = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 1
         assert "raw_hash" in proc.stdout.lower()
@@ -784,7 +784,7 @@ class TestSourcePagesNoSourcesField:
         subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
              str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         # Create a source page with sources field (should be flagged)
         page = wiki / "wiki" / "sources" / "bad-source.md"
@@ -800,7 +800,7 @@ class TestSourcePagesNoSourcesField:
         )
         proc = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert proc.returncode == 1
         assert "source" in proc.stdout.lower() and "sources" in proc.stdout.lower()
@@ -811,7 +811,7 @@ class TestSourcePagesNoSourcesField:
         subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
              str(wiki), "Test Wiki"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         # Create a source page without sources field (correct)
         raw = wiki / "raw" / "articles" / "good.md"
@@ -829,6 +829,6 @@ class TestSourcePagesNoSourcesField:
         )
         proc = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         assert "should not have" not in proc.stdout.lower()
