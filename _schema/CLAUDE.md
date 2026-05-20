@@ -25,22 +25,32 @@ The wiki is the product. Chat is just the interface.
 
 When a new source is added to `raw/`:
 
-1. Read the source file
-2. Discuss key takeaways with the user
-3. Create a source summary page:
+**Phase 1: Read & Discuss (must complete before writing any pages)**
+
+1. Read the source file in full
+2. Present a structured summary to the user:
+   - **Core thesis**: What is this source arguing or reporting? (2–3 sentences)
+   - **New concepts/entities**: Which ideas, methods, or entities appear that don't yet have wiki pages?
+   - **Relations to existing pages**: Which existing wiki pages does this source confirm, contradict, or extend? Be specific — cite page names.
+   - **Claims to verify**: Which factual claims need cross-referencing with other sources?
+   - **Proposed actions**: Which pages to create, which to update, which tags to apply
+3. Wait for user confirmation before proceeding. The user may redirect — skip certain pages, merge concepts, or request different emphasis.
+
+**Phase 2: Write Pages**
+
+4. Create a source summary page:
    ```
-   # --raw-path links this wiki page back to the original immutable file in raw/
    python scripts/create_page.py . source "<title>" --raw-path "raw/<path>"
    ```
-   Then edit the generated file to fill content
-4. For each new concept or entity mentioned, create a page:
+   Then edit to fill content
+5. For each new concept or entity confirmed in step 3, create a page:
    ```
    python scripts/create_page.py . <type> "<name>"
    ```
-5. Cascade-update all existing concept/entity/synthesis pages that are relevant
-6. Update `wiki/index.md` — add new pages under the correct section
-7. Append a log entry to `log/{date}.md`
-8. Update `hot.md` with the latest activity
+6. Cascade-update all existing concept/entity/synthesis pages that are relevant
+7. Update `wiki/index.md` — add new pages under the correct section
+8. Append a log entry to `log/{date}.md`
+9. Update `hot.md` with the latest activity
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 
@@ -55,7 +65,12 @@ When answering questions:
 3. Drill into specific pages for details
 4. Synthesize an answer with `[[page-name]]` citations
 
-Good answers can be saved back as new synthesis pages — explorations compound in the knowledge base just like ingested sources do.
+**When to file an answer back as a new page:**
+- The answer synthesizes 2+ existing wiki pages into a new comparison or analysis
+- The answer resolves an open question from `questions.md`
+- The user explicitly says "save this" or "add this to the wiki"
+
+When filing back, create a synthesis page and update `wiki/index.md`. Update `hot.md` under "Recently Queried".
 
 ### Lint
 
