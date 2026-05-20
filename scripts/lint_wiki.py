@@ -20,6 +20,8 @@ Checks:
   9. Tag taxonomy — tags on wiki pages must appear in the CLAUDE.md taxonomy (if defined)
   10. Stale pages — pages with review_by date in the past
   11. Filename case — wiki page filenames must be all lowercase
+  12. Source pages shouldn't have a sources field
+  13. overview.md exists — wiki/overview.md must be present
 
 Exit codes:
   0 — no issues found
@@ -488,6 +490,14 @@ def lint(root: str) -> int:
         issues += len(source_with_sources)
     else:
         print("✅ No source pages with sources field")
+
+    # ── Pass 13: overview.md exists ─────────────────────────────────
+    overview_path = wiki_path / "overview.md"
+    if not overview_path.exists():
+        print("❌ wiki/overview.md is missing — run scaffold to create it, then update during ingest")
+        issues += 1
+    else:
+        print("✅ overview.md exists")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")

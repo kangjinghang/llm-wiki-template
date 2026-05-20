@@ -431,6 +431,7 @@ class TestTagTaxonomyLint:
             "## Tag Taxonomy\n\n- deep-learning\n- nlp\n\n## End\n",
             encoding="utf-8",
         )
+        (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "test.md").write_text(
             '---\ntitle: Test\ntype: concept\ntags: [deep-learning, nlp]\n---\nBody\n',
@@ -486,6 +487,7 @@ class TestStalePageLint:
         (tmp_path / "wiki" / "concepts").mkdir(parents=True)
         (tmp_path / "log").mkdir()
         (tmp_path / "audit").mkdir()
+        (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[fresh]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "fresh.md").write_text(
             '---\ntitle: Fresh\ntype: concept\nreview_by: "2099-12-31"\n---\nBody\n',
@@ -502,6 +504,7 @@ class TestStalePageLint:
         (tmp_path / "wiki" / "concepts").mkdir(parents=True)
         (tmp_path / "log").mkdir()
         (tmp_path / "audit").mkdir()
+        (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[empty]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "empty.md").write_text(
             '---\ntitle: Empty\ntype: concept\nreview_by: ""\n---\nBody\n',
@@ -626,6 +629,7 @@ class TestComputeHash:
         content = "Stable content"
         raw_file.write_text(content, encoding="utf-8")
         content_hash = hashlib.sha256(content.encode()).hexdigest()
+        (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test-src]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "sources" / "test-src.md").write_text(
             f'---\ntitle: Test\ntype: source\nraw_path: "raw/articles/test.md"\n'
@@ -832,3 +836,38 @@ class TestSourcePagesNoSourcesField:
             capture_output=True, text=True, encoding="utf-8",
         )
         assert "should not have" not in proc.stdout.lower()
+
+
+# --- overview.md existence ---
+
+class TestOverviewExists:
+    def test_flags_missing_overview(self, tmp_path):
+        """Wiki without overview.md should be flagged."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Delete overview.md
+        (wiki / "wiki" / "overview.md").unlink()
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 1
+        assert "overview" in proc.stdout.lower()
+
+    def test_passes_with_overview(self, tmp_path):
+        """Wiki with overview.md should pass this check."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
