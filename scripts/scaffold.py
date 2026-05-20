@@ -94,7 +94,7 @@ Then follow the ingest workflow defined in CLAUDE.md:
 1. Read the source file in full
 2. Present a structured summary (core thesis, new concepts/entities, relations to existing pages, claims to verify, proposed actions)
 3. Wait for my confirmation before creating any pages
-4. Create source summary page with `--raw-path` pointing back to the original file, concept/entity pages, cascade updates
+4. Create source summary page with `--raw-path` AND `--compute-hash`, concept/entity pages, cascade updates
 5. Update wiki/index.md, log/{{date}}.md, hot.md
 """)
     _write(root_path, ".claude/commands/query.md", f"""Answer the following question using the wiki: $ARGUMENTS

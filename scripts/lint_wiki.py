@@ -389,6 +389,20 @@ def lint(root: str) -> int:
         issues += len(hash_mismatch)
     else:
         print("✅ All raw_hash values match current source files")
+    # Check: source pages with raw_path but missing raw_hash
+    missing_hash: list[str] = []
+    for md_file in all_wiki_files:
+        text = md_file.read_text(encoding="utf-8")
+        fm = parse_frontmatter(text)
+        if fm and fm.get("raw_path") and not fm.get("raw_hash"):
+            raw_rel = fm["raw_path"].strip('"').strip("'")
+            if raw_rel:
+                missing_hash.append(str(md_file.relative_to(root_path)))
+    if missing_hash:
+        print(f"\n🟡 Source pages missing raw_hash ({len(missing_hash)}):")
+        for page in missing_hash:
+            print(f"   {page}")
+        issues += len(missing_hash)
 
     # ── Pass 9: tag taxonomy ──────────────────────────────────────────────
     taxonomy = load_tag_taxonomy(root_path)

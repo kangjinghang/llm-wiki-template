@@ -741,3 +741,37 @@ class TestSourceTemplateNoSources:
         assert "sources" not in fm_section or "sources: []" not in fm_section
         # But raw_path MUST be there
         assert "raw_path" in fm_section
+
+
+# --- raw_hash presence check ---
+
+class TestRawHashPresence:
+    def test_flags_source_with_raw_path_but_no_hash(self, tmp_path):
+        """Source pages with raw_path should also have raw_hash."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True,
+        )
+        # Create a source page with raw_path but no raw_hash
+        raw = wiki / "raw" / "articles" / "test.md"
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        raw.write_text("Some content", encoding="utf-8")
+        page = wiki / "wiki" / "sources" / "test-source.md"
+        page.write_text(
+            '---\ntitle: "Test"\ntype: source\nraw_path: "raw/articles/test.md"\n---\nContent\n',
+            encoding="utf-8",
+        )
+        # Add to index
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace("*(none yet)*", "- [[test-source]]", 1),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 1
+        assert "raw_hash" in proc.stdout.lower()

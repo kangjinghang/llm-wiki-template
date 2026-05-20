@@ -136,6 +136,8 @@ wiki-root/
 
 All pages require YAML frontmatter with: `title`, `type`, `summary`, `tags`, `sources`, `origin`, `status`, `created`, `updated`.
 
+**`sources` field semantics**: On concept/entity/synthesis pages, `sources` lists related source page names in wikilink format (e.g. `[["source-page-name"]]`), NOT raw file paths. On source pages, use `raw_path` to link to the raw file.
+
 ## Page Status Lifecycle
 
 - `seed` — just created, minimal content
