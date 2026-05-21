@@ -923,8 +923,9 @@ class TestInlineWikilinkDensity:
             'across different experimental conditions and validation scenarios.\n\n'
             '## Applications\n\n'
             'This concept has broad applications in practice. Researchers have demonstrated its effectiveness '
-            'in numerous studies and real-world deployments across multiple domains. The theoretical foundation '
-            'provides a robust framework for further exploration and continued development.\n\n'
+            'in numerous studies and real-world deployments across multiple domains. Additional experiments '
+            'have confirmed that the approach scales well under varying conditions, making it suitable for '
+            'large-scale production environments.\n\n'
             '## Related Pages\n\n'
             '- [[其他概念]]\n'
             '- [[另一实体]]\n',
@@ -983,9 +984,13 @@ class TestInlineWikilinkDensity:
             '---\n\n'
             '# Test Concept\n\n'
             '## Definition\n\n'
-            'This concept builds on [[其他概念]] and extends it.\n\n'
+            'This concept builds on [[其他概念]] and extends it to cover a broader range of scenarios. '
+            'The theoretical foundation draws from multiple disciplines and synthesizes existing knowledge '
+            'into a coherent framework that can be applied systematically.\n\n'
             '## How It Works\n\n'
-            'The mechanism is related to [[另一实体]] in practice.\n\n'
+            'The mechanism is related to [[另一实体]] in practice. It operates through a series of '
+            'well-defined stages that transform input data into meaningful outputs. Each stage has been '
+            'validated independently and in combination through extensive experimentation.\n\n'
             '## Related Pages\n\n'
             '- [[其他概念]]\n',
             encoding="utf-8",
