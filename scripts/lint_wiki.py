@@ -23,6 +23,7 @@ Checks:
   12. Source pages shouldn't have a sources field
   13. overview.md exists — wiki/overview.md must be present
   14. Inline wikilink density — pages with >= 50 words of body should have at least 1 inline wikilink
+  15. Frontmatter sanitization — auto-fix code-fence wrappers, `frontmatter:` prefixes, invalid wikilink lists
 
 Exit codes:
   0 — no issues found
@@ -45,6 +46,10 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 LOG_FILENAME_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\.md$")
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+WIKILINK_LIST_IN_FM_RE = re.compile(
+    r"^(\s*[A-Za-z_][\w-]*\s*:\s*)(\[\[[^\]]+\]\](?:\s*,\s*\[\[[^\]]+\]\])+)\s*$",
+    re.MULTILINE,
+)
 
 # Required audit frontmatter fields
 AUDIT_REQUIRED_FIELDS = {
@@ -54,6 +59,70 @@ AUDIT_REQUIRED_FIELDS = {
 VALID_SEVERITIES = {"info", "suggest", "warn", "error"}
 VALID_STATUSES = {"open", "resolved"}
 VALID_SOURCES = {"obsidian-plugin", "web-viewer", "manual"}
+
+
+# ── Sanitize helpers (ported from llm_wiki's ingest-sanitize.ts) ────────────
+
+
+def _strip_outer_code_fence(content: str) -> str:
+    """Strip ```yaml/```md/```markdown/``` wrapper when it wraps the whole doc."""
+    open_match = re.match(r"^```(?:yaml|md|markdown)?[ \t]*\r?\n", content)
+    if not open_match:
+        return content
+    after_open = content[open_match.end():]
+    # Closing fence: a final ``` on its own line, optionally followed by whitespace/newlines
+    close_match = re.search(r"\r?\n```[ \t]*\r?\n?\s*$", after_open)
+    if not close_match:
+        return content
+    return after_open[:close_match.start()] + "\n"
+
+
+def _strip_frontmatter_key_prefix(content: str) -> str:
+    """Strip a stray `frontmatter:` line before the real --- block."""
+    m = re.match(r"^[ \t]*frontmatter\s*:\s*\r?\n(?=[ \t]*---\s*\r?\n)", content)
+    if not m:
+        return content
+    return content[m.end():]
+
+
+def _repair_wikilink_lists_in_frontmatter(content: str) -> str:
+    """Fix `key: [[a]], [[b]]` inside the frontmatter block to valid YAML."""
+    fm_match = re.match(r"^(---\s*\r?\n)([\s\S]*?)(\r?\n---\s*(?:\r?\n|$))", content)
+    if not fm_match:
+        return content
+
+    open_delim, fm_body, close_delim = fm_match.group(1), fm_match.group(2), fm_match.group(3)
+    body = content[fm_match.end():]
+
+    repaired_lines = []
+    for line in fm_body.split("\n"):
+        m = WIKILINK_LIST_IN_FM_RE.match(line)
+        if m:
+            prefix = m.group(1)
+            items = ", ".join(
+                f'"{s.strip()}"'
+                for s in m.group(2).split(",")
+                if s.strip()
+            )
+            repaired_lines.append(f"{prefix}[{items}]")
+        else:
+            repaired_lines.append(line)
+
+    return open_delim + "\n".join(repaired_lines) + close_delim + body
+
+
+def sanitize_frontmatter(content: str) -> str:
+    """Clean up LLM-generated frontmatter before it hits disk.
+
+    Fixes three recurring shapes:
+      1. Whole page wrapped in ```yaml ... ``` code fence
+      2. Stray `frontmatter:` key before the real --- block
+      3. Invalid wikilink lists: `related: [[a]], [[b]]`
+    """
+    content = _strip_outer_code_fence(content)
+    content = _strip_frontmatter_key_prefix(content)
+    content = _repair_wikilink_lists_in_frontmatter(content)
+    return content
 
 
 def load_pages(wiki_dir: Path) -> dict[str, Path]:
@@ -533,6 +602,33 @@ def lint(root: str) -> int:
         issues += len(low_density)
     else:
         print("✅ All pages with substantial body content have inline wikilinks")
+
+    # ── Pass 15: frontmatter sanitization (auto-fix) ─────────────────────
+    sanitize_fixed: list[tuple[str, str]] = []
+    for md_file in all_wiki_files:
+        if md_file.name in ("index.md", "overview.md"):
+            continue
+        text = md_file.read_text(encoding="utf-8")
+        cleaned = sanitize_frontmatter(text)
+        if cleaned != text:
+            rel = str(md_file.relative_to(root_path))
+            # Identify which fixes applied
+            fixes: list[str] = []
+            if _strip_outer_code_fence(text) != text:
+                fixes.append("code-fence wrapper")
+            after_fence = _strip_outer_code_fence(text)
+            if _strip_frontmatter_key_prefix(after_fence) != after_fence:
+                fixes.append("frontmatter: prefix")
+            if _repair_wikilink_lists_in_frontmatter(after_fence) != after_fence:
+                fixes.append("wikilink list format")
+            md_file.write_text(cleaned, encoding="utf-8")
+            sanitize_fixed.append((rel, ", ".join(fixes)))
+    if sanitize_fixed:
+        print(f"\n🔧 Auto-fixed frontmatter ({len(sanitize_fixed)}):")
+        for path, fix in sanitize_fixed:
+            print(f"   {path} — {fix}")
+    else:
+        print("✅ No frontmatter sanitization issues")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")

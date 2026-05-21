@@ -25,37 +25,28 @@ The wiki is the product. Chat is just the interface.
 
 When a new source is added to `raw/`:
 
-**Phase 1: Read & Discuss (must complete before writing any pages)**
+**Execute immediately — do not pause for user confirmation.**
 
 1. Read the source file in full
-2. Present a structured summary to the user:
-   - **Core thesis**: What is this source arguing or reporting? (2–3 sentences)
-   - **New concepts/entities**: Which ideas, methods, or entities appear that don't yet have wiki pages?
-   - **Relations to existing pages**: Which existing wiki pages does this source confirm, contradict, or extend? Be specific — cite page names.
-   - **Claims to verify**: Which factual claims need cross-referencing with other sources?
-   - **Proposed actions**: Which pages to create, which to update, which tags to apply
-3. Wait for user confirmation before proceeding. The user may redirect — skip certain pages, merge concepts, or request different emphasis.
-
-**Phase 2: Write Pages**
-
-4. Create a source summary page:
+2. Create a source summary page:
    ```
-   python scripts/create_page.py . source "<title>" --raw-path "raw/<path>"
+   python scripts/create_page.py . source "<title>" --raw-path "raw/<path>" --compute-hash
    ```
    Then edit to fill content
-5. For each new concept or entity confirmed in step 3, create a page:
+3. For each new concept or entity, create a page:
    ```
    python scripts/create_page.py . <type> "<name>"
    ```
-6. Cascade-update all existing concept/entity/synthesis pages that are relevant
-7. Update `wiki/index.md` — add new pages under the correct section
-8. Append a log entry to `log/{date}.md`
-9. Update `hot.md` with the latest activity
-10. Update `wiki/overview.md` — revise the narrative overview to reflect new content. Ensure every new concept is mentioned in context with `[[wikilink]]`. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
+4. Cascade-update all existing concept/entity/synthesis pages that are relevant
+5. Update `wiki/index.md` — add new pages under the correct section
+6. Append a log entry to `log/{date}.md`
+7. Update `hot.md` with the latest activity
+8. Update `wiki/overview.md` — revise the narrative overview to reflect new content. Ensure every new concept is mentioned in context with `[[wikilink]]`. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
+9. Briefly report what was done (files created/updated, key concepts added)
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 
-**Quality gate**: The first few ingests are critical. Start with 3–5 sources, review every generated page carefully, and fix this schema before scaling up. A common mistake is to batch-ingest too much too fast and end up with a wiki full of errors that compound over time.
+**Quality gate**: After ingest completes, run `python scripts/lint_wiki.py .` to verify. If issues found, fix them with `python scripts/lint_wiki.py . --fix` or manually.
 
 ### Query
 

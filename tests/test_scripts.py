@@ -1002,3 +1002,101 @@ class TestInlineWikilinkDensity:
         )
         # Should pass — inline wikilinks exist in body
         assert proc.returncode == 0
+
+
+# --- sanitize_frontmatter ---
+
+class TestSanitizeFrontmatter:
+    """Tests for sanitize_frontmatter — ported from llm_wiki's ingest-sanitize.ts."""
+
+    def test_strips_outer_yaml_code_fence(self):
+        """LLM wraps entire page in ```yaml ... ``` — strip both fences."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "```yaml\n---\ntype: concept\ntitle: Test\n---\n\n# Test\n```\n"
+        expected = "---\ntype: concept\ntitle: Test\n---\n\n# Test\n"
+        assert sanitize_frontmatter(input_content) == expected
+
+    def test_strips_outer_bare_code_fence(self):
+        """LLM wraps with bare ``` (no language hint)."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "```\n---\ntype: concept\ntitle: Test\n---\n\n# Test\n```\n"
+        expected = "---\ntype: concept\ntitle: Test\n---\n\n# Test\n"
+        assert sanitize_frontmatter(input_content) == expected
+
+    def test_strips_frontmatter_key_prefix(self):
+        """LLM prepends `frontmatter:` before the --- block."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "frontmatter:\n---\ntype: entity\ntitle: Foo\n---\n\n# Foo\n"
+        expected = "---\ntype: entity\ntitle: Foo\n---\n\n# Foo\n"
+        assert sanitize_frontmatter(input_content) == expected
+
+    def test_repairs_wikilink_list_in_frontmatter(self):
+        """`related: [[a]], [[b]], [[c]]` is invalid YAML — fix to inline array."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "---\ntype: concept\ntitle: Test\nrelated: [[a]], [[b]], [[c]]\n---\n\n# Test\n"
+        expected = "---\ntype: concept\ntitle: Test\nrelated: [\"[[a]]\", \"[[b]]\", \"[[c]]\"]\n---\n\n# Test\n"
+        assert sanitize_frontmatter(input_content) == expected
+
+    def test_leaves_clean_frontmatter_untouched(self):
+        """Clean frontmatter passes through unchanged."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "---\ntype: concept\ntitle: Test\ntags: [a, b]\n---\n\n# Test\n"
+        assert sanitize_frontmatter(input_content) == input_content
+
+    def test_does_not_touch_body_wikilinks(self):
+        """Wikilink lists in the body (outside frontmatter) are left alone."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "---\ntype: concept\ntitle: Test\n---\n\nSee [[a]], [[b]], [[c]] for details.\n"
+        assert sanitize_frontmatter(input_content) == input_content
+
+    def test_combined_fence_and_prefix(self):
+        """Both ```yaml wrapper AND frontmatter: prefix — strip both."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "```yaml\nfrontmatter:\n---\ntype: entity\ntitle: Foo\n---\n\n# Foo\n```\n"
+        expected = "---\ntype: entity\ntitle: Foo\n---\n\n# Foo\n"
+        assert sanitize_frontmatter(input_content) == expected
+
+    def test_strips_md_code_fence(self):
+        """LLM wraps in ```md ... ```."""
+        from lint_wiki import sanitize_frontmatter
+        input_content = "```md\n---\ntype: concept\ntitle: Test\n---\n\n# Test\n```\n"
+        expected = "---\ntype: concept\ntitle: Test\n---\n\n# Test\n"
+        assert sanitize_frontmatter(input_content) == expected
+
+
+class TestSanitizeLintPass:
+    """Integration test: Pass 15 detects frontmatter issues and --fix repairs them."""
+
+    def test_lint_detects_and_auto_fixes_code_fence(self, tmp_path):
+        wiki = tmp_path / "test-wiki"
+        wiki.mkdir()
+        (wiki / "wiki").mkdir()
+        (wiki / "wiki" / "concepts").mkdir()
+        (wiki / "wiki" / "sources").mkdir()
+        (wiki / "wiki" / "entities").mkdir()
+        (wiki / "wiki" / "syntheses").mkdir()
+        (wiki / "wiki" / "meta").mkdir()
+        (wiki / "raw" / "articles").mkdir(parents=True)
+        (wiki / "log").mkdir()
+        (wiki / "audit").mkdir()
+        (wiki / "_templates").mkdir()
+
+        (wiki / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
+        (wiki / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
+
+        # Write a page with ```yaml wrapper
+        bad_page = wiki / "wiki" / "concepts" / "test-concept.md"
+        bad_page.write_text(
+            "```yaml\n---\ntype: concept\ntitle: Test\n---\n\n# Test\n```\n",
+            encoding="utf-8",
+        )
+
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert "Auto-fixed frontmatter" in proc.stdout
+
+        # Verify the fix was written to disk
+        fixed = bad_page.read_text(encoding="utf-8")
+        assert fixed.startswith("---\ntype: concept")

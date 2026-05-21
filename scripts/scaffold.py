@@ -90,12 +90,11 @@ def scaffold(root: str, title: str) -> None:
 3. Show the user the list of unprocessed files (raw files NOT referenced by any source page)
 4. If only one unprocessed file exists, proceed with it. If multiple, ask the user which to ingest first.
 
-Then follow the ingest workflow defined in CLAUDE.md:
+Then follow the ingest workflow defined in CLAUDE.md — execute immediately without pausing for confirmation:
 1. Read the source file in full
-2. Present a structured summary (core thesis, new concepts/entities, relations to existing pages, claims to verify, proposed actions)
-3. Wait for my confirmation before creating any pages
-4. Create source summary page with `--raw-path` AND `--compute-hash`, concept/entity pages, cascade updates
-5. Update wiki/index.md, log/{{date}}.md, hot.md
+2. Create source summary page with `--raw-path` AND `--compute-hash`, concept/entity pages, cascade updates
+3. Update wiki/index.md, log/{{date}}.md, hot.md, wiki/overview.md
+4. Briefly report what was done
 """)
     _write(root_path, ".claude/commands/query.md", f"""Answer the following question using the wiki: $ARGUMENTS
 
