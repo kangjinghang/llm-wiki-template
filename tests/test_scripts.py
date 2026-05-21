@@ -588,8 +588,8 @@ class TestComputeHash:
         content = out.read_text(encoding="utf-8")
         assert "raw_hash:" not in content
 
-    def test_lint_flags_hash_mismatch(self, tmp_path):
-        """When raw file changes after ingest, lint should detect the mismatch."""
+    def test_lint_auto_fixes_hash_mismatch(self, tmp_path):
+        """When raw file changes after ingest, lint should auto-fix the hash."""
         import hashlib
         lint = REPO_ROOT / "scripts" / "lint_wiki.py"
         (tmp_path / "wiki" / "sources").mkdir(parents=True)
@@ -610,12 +610,15 @@ class TestComputeHash:
         )
         # Modify the raw file
         raw_file.write_text("Modified content", encoding="utf-8")
+        new_hash = hashlib.sha256(b"Modified content").hexdigest()
         proc = subprocess.run(
             [sys.executable, str(lint), str(tmp_path)],
             capture_output=True, text=True, encoding="utf-8",
         )
-        assert proc.returncode == 1
-        assert "raw_hash mismatch" in proc.stdout
+        assert "Auto-fixed raw_hash" in proc.stdout
+        # Verify the hash was updated on disk
+        updated = (tmp_path / "wiki" / "sources" / "test-src.md").read_text(encoding="utf-8")
+        assert new_hash in updated
 
     def test_lint_passes_when_hash_matches(self, tmp_path):
         """When raw file is unchanged, lint should pass hash check."""

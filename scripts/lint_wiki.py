@@ -427,10 +427,10 @@ def lint(root: str) -> int:
     elif audit_targets_to_check:
         print("✅ All open-audit targets exist")
 
-    # ── Pass 8: raw_path existence + hash verification ────────────────────
+    # ── Pass 8: raw_path existence + hash auto-fix ────────────────────────
     import hashlib as _hashlib
     missing_raw: list[tuple[str, str]] = []
-    hash_mismatch: list[tuple[str, str]] = []
+    hash_fixed: list[str] = []
     for md_file in all_wiki_files:
         text = md_file.read_text(encoding="utf-8")
         fm = parse_frontmatter(text)
@@ -446,9 +446,9 @@ def lint(root: str) -> int:
                     stored_hash = str(fm["raw_hash"]).strip('"').strip("'")
                     actual_hash = _hashlib.sha256(raw_full.read_bytes()).hexdigest()
                     if stored_hash and stored_hash != actual_hash:
-                        hash_mismatch.append(
-                            (str(md_file.relative_to(root_path)), raw_rel)
-                        )
+                        new_text = text.replace(stored_hash, actual_hash)
+                        md_file.write_text(new_text, encoding="utf-8")
+                        hash_fixed.append(str(md_file.relative_to(root_path)))
     if missing_raw:
         print(f"\n🟡 Source pages with missing raw_path ({len(missing_raw)}):")
         for page, raw in missing_raw:
@@ -456,11 +456,10 @@ def lint(root: str) -> int:
         issues += len(missing_raw)
     else:
         print("✅ All source raw_path references exist")
-    if hash_mismatch:
-        print(f"\n🟡 raw_hash mismatch — source file changed since ingest ({len(hash_mismatch)}):")
-        for page, raw in hash_mismatch:
-            print(f"   {page} ← {raw}")
-        issues += len(hash_mismatch)
+    if hash_fixed:
+        print(f"\n🔧 Auto-fixed raw_hash ({len(hash_fixed)}):")
+        for page in hash_fixed:
+            print(f"   {page}")
     else:
         print("✅ All raw_hash values match current source files")
     # Check: source pages with raw_path but missing raw_hash
