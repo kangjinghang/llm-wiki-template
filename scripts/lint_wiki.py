@@ -22,8 +22,9 @@ Checks:
   11. Filename case — wiki page filenames must be all lowercase
   12. Source pages shouldn't have a sources field
   13. overview.md exists — wiki/overview.md must be present
-  14. Inline wikilink density — pages with >= 50 words of body should have at least 1 inline wikilink
-  15. Frontmatter sanitization — auto-fix code-fence wrappers, `frontmatter:` prefixes, invalid wikilink lists
+  14. Inline wikilink density — pages with >= 80 words of body should have at least 2 inline wikilinks
+  15. Non-ASCII filename — concept/entity pages should use Chinese filenames, not pure-ASCII
+  16. Frontmatter sanitization — auto-fix code-fence wrappers, `frontmatter:` prefixes, invalid wikilink lists
 
 Exit codes:
   0 — no issues found
@@ -569,9 +570,9 @@ def lint(root: str) -> int:
         print("✅ overview.md exists")
 
     # ── Pass 14: Inline wikilink density ─────────────────────────────
-    # Pages with >= 50 words of body content should have at least 1 inline [[wikilink]]
+    # Pages with >= 80 words of body content should have at least 2 inline [[wikilink]]s
     # in their body (outside of Related Pages / Sources sections and frontmatter).
-    low_density: list[tuple[str, int]] = []
+    low_density: list[tuple[str, int, int]] = []
     for md_file in all_wiki_files:
         if md_file.name in ("index.md", "overview.md"):
             continue
@@ -588,21 +589,46 @@ def lint(root: str) -> int:
         body_clean = re.sub(r"<!-- human:start -->.*?<!-- human:end -->", "", body_clean, flags=re.DOTALL)
         # Count words (rough: split on whitespace, filter short tokens)
         words = [w for w in body_clean.split() if len(w) > 1]
-        if len(words) < 50:
+        if len(words) < 80:
             continue
         # Count inline wikilinks in the cleaned body
         inline_links = re.findall(r"\[\[([^\]]+)\]\]", body_clean)
-        if len(inline_links) == 0:
-            low_density.append((rel, len(words)))
+        inline_link_count = len(inline_links)
+        if inline_link_count < 2:
+            low_density.append((rel, len(words), inline_link_count))
     if low_density:
-        print(f"\n⚠️  {len(low_density)} page(s) with no inline wikilinks in body (>= 50 words):")
-        for path, wc in low_density:
-            print(f"   {path} ({wc} words, 0 inline links)")
+        print(f"\n⚠️  {len(low_density)} page(s) with fewer than 2 inline wikilinks in body (>= 80 words):")
+        for path, wc, lc in low_density:
+            print(f"   {path} ({wc} words, {lc} inline links)")
         issues += len(low_density)
     else:
         print("✅ All pages with substantial body content have inline wikilinks")
 
-    # ── Pass 15: frontmatter sanitization (auto-fix) ─────────────────────
+    # ── Pass 15: Non-ASCII filename for concept/entity pages ──────────
+    # Concept and entity pages should use Chinese filenames, not pure-ASCII English.
+    # Source pages are exempt (raw article titles may be English).
+    ascii_names: list[str] = []
+    for md_file in all_wiki_files:
+        rel = str(md_file.relative_to(wiki_path))
+        parts = rel.replace("\\", "/").split("/")
+        if len(parts) < 2:
+            continue
+        subdir = parts[0]  # concepts, entities, sources, etc.
+        if subdir not in ("concepts", "entities"):
+            continue
+        stem = md_file.stem
+        # Pure ASCII = all characters are in range 0-127
+        if stem.isascii() and stem:
+            ascii_names.append(rel)
+    if ascii_names:
+        print(f"\n⚠️  {len(ascii_names)} concept/entity page(s) with pure-ASCII (English) filenames:")
+        for name in ascii_names:
+            print(f"   {name} — use Chinese filename instead")
+        issues += len(ascii_names)
+    else:
+        print("✅ All concept/entity pages have non-ASCII (Chinese) filenames")
+
+    # ── Pass 16: frontmatter sanitization (auto-fix) ─────────────────────
     sanitize_fixed: list[tuple[str, str]] = []
     for md_file in all_wiki_files:
         if md_file.name in ("index.md", "overview.md"):

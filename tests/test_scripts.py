@@ -432,8 +432,8 @@ class TestTagTaxonomyLint:
             encoding="utf-8",
         )
         (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
-        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test]]\n", encoding="utf-8")
-        (tmp_path / "wiki" / "concepts" / "test.md").write_text(
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[测试]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "测试.md").write_text(
             '---\ntitle: Test\ntype: concept\ntags: [deep-learning, nlp]\n---\nBody\n',
             encoding="utf-8",
         )
@@ -450,7 +450,7 @@ class TestTagTaxonomyLint:
         (tmp_path / "audit").mkdir()
         (tmp_path / "CLAUDE.md").write_text("## Just Docs\n\nNo taxonomy.\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
-        (tmp_path / "wiki" / "concepts" / "test.md").write_text(
+        (tmp_path / "wiki" / "concepts" / "测试.md").write_text(
             '---\ntitle: Test\ntype: concept\ntags: [anything]\n---\nBody\n',
             encoding="utf-8",
         )
@@ -488,8 +488,8 @@ class TestStalePageLint:
         (tmp_path / "log").mkdir()
         (tmp_path / "audit").mkdir()
         (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
-        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[fresh]]\n", encoding="utf-8")
-        (tmp_path / "wiki" / "concepts" / "fresh.md").write_text(
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[新鲜]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "新鲜.md").write_text(
             '---\ntitle: Fresh\ntype: concept\nreview_by: "2099-12-31"\n---\nBody\n',
             encoding="utf-8",
         )
@@ -505,8 +505,8 @@ class TestStalePageLint:
         (tmp_path / "log").mkdir()
         (tmp_path / "audit").mkdir()
         (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
-        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[empty]]\n", encoding="utf-8")
-        (tmp_path / "wiki" / "concepts" / "empty.md").write_text(
+        (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[空白]]\n", encoding="utf-8")
+        (tmp_path / "wiki" / "concepts" / "空白.md").write_text(
             '---\ntitle: Empty\ntype: concept\nreview_by: ""\n---\nBody\n',
             encoding="utf-8",
         )
@@ -719,7 +719,7 @@ class TestNamingConventionLint:
              str(wiki), "Test Wiki"],
             capture_output=True, text=True, encoding="utf-8",
         )
-        (wiki / "wiki" / "concepts" / "esp-factor.md").write_text(
+        (wiki / "wiki" / "concepts" / "esp因子.md").write_text(
             "---\ntitle: ESP Factor\ntype: concept\n---\nContent\n",
             encoding="utf-8",
         )
@@ -727,7 +727,7 @@ class TestNamingConventionLint:
         index = wiki / "wiki" / "index.md"
         index.write_text(
             index.read_text(encoding="utf-8").replace(
-                "*(none yet)*", "- [[esp-factor]]", 1
+                "*(none yet)*", "- [[esp因子]]", 1
             ),
             encoding="utf-8",
         )
@@ -888,17 +888,17 @@ class TestInlineWikilinkDensity:
             capture_output=True, text=True, encoding="utf-8",
         )
         # Create target pages so no dead links are reported
-        (wiki / "wiki" / "concepts" / "other-concept.md").write_text(
+        (wiki / "wiki" / "concepts" / "其他概念.md").write_text(
             '---\ntitle: "Other"\ntype: concept\n---\nStub\n', encoding="utf-8",
         )
-        (wiki / "wiki" / "entities" / "another-entity.md").write_text(
+        (wiki / "wiki" / "entities" / "另一实体.md").write_text(
             '---\ntitle: "Entity"\ntype: entity\n---\nStub\n', encoding="utf-8",
         )
         (wiki / "wiki" / "sources" / "test-source.md").write_text(
             '---\ntitle: "Source"\ntype: source\n---\nStub\n', encoding="utf-8",
         )
         # Create a concept page with wikilinks ONLY in Related Pages (body has none)
-        page = wiki / "wiki" / "concepts" / "test-concept.md"
+        page = wiki / "wiki" / "concepts" / "测试概念.md"
         page.write_text(
             '---\n'
             'title: "Test Concept"\n'
@@ -923,10 +923,11 @@ class TestInlineWikilinkDensity:
             'across different experimental conditions and validation scenarios.\n\n'
             '## Applications\n\n'
             'This concept has broad applications in practice. Researchers have demonstrated its effectiveness '
-            'in numerous studies and real-world deployments across multiple domains.\n\n'
+            'in numerous studies and real-world deployments across multiple domains. The theoretical foundation '
+            'provides a robust framework for further exploration and continued development.\n\n'
             '## Related Pages\n\n'
-            '- [[other-concept]]\n'
-            '- [[another-entity]]\n',
+            '- [[其他概念]]\n'
+            '- [[另一实体]]\n',
             encoding="utf-8",
         )
         # Add all pages to index
@@ -934,7 +935,7 @@ class TestInlineWikilinkDensity:
         index.write_text(
             index.read_text(encoding="utf-8").replace(
                 "*(none yet)*",
-                "- [[test-concept]]\n- [[other-concept]]\n- [[another-entity]]\n- [[test-source]]",
+                "- [[测试概念]]\n- [[其他概念]]\n- [[另一实体]]\n- [[test-source]]",
                 1
             ),
             encoding="utf-8",
@@ -955,16 +956,16 @@ class TestInlineWikilinkDensity:
             capture_output=True, text=True, encoding="utf-8",
         )
         # Create target pages so no dead links are reported
-        (wiki / "wiki" / "concepts" / "other-concept.md").write_text(
+        (wiki / "wiki" / "concepts" / "其他概念.md").write_text(
             '---\ntitle: "Other"\ntype: concept\n---\nStub\n', encoding="utf-8",
         )
-        (wiki / "wiki" / "entities" / "another-entity.md").write_text(
+        (wiki / "wiki" / "entities" / "另一实体.md").write_text(
             '---\ntitle: "Entity"\ntype: entity\n---\nStub\n', encoding="utf-8",
         )
         (wiki / "wiki" / "sources" / "test-source.md").write_text(
             '---\ntitle: "Source"\ntype: source\n---\nStub\n', encoding="utf-8",
         )
-        page = wiki / "wiki" / "concepts" / "test-concept.md"
+        page = wiki / "wiki" / "concepts" / "测试概念.md"
         page.write_text(
             '---\n'
             'title: "Test Concept"\n'
@@ -982,11 +983,11 @@ class TestInlineWikilinkDensity:
             '---\n\n'
             '# Test Concept\n\n'
             '## Definition\n\n'
-            'This concept builds on [[other-concept]] and extends it.\n\n'
+            'This concept builds on [[其他概念]] and extends it.\n\n'
             '## How It Works\n\n'
-            'The mechanism is related to [[another-entity]] in practice.\n\n'
+            'The mechanism is related to [[另一实体]] in practice.\n\n'
             '## Related Pages\n\n'
-            '- [[other-concept]]\n',
+            '- [[其他概念]]\n',
             encoding="utf-8",
         )
         # Add all pages to index
@@ -994,7 +995,7 @@ class TestInlineWikilinkDensity:
         index.write_text(
             index.read_text(encoding="utf-8").replace(
                 "*(none yet)*",
-                "- [[test-concept]]\n- [[other-concept]]\n- [[another-entity]]\n- [[test-source]]",
+                "- [[测试概念]]\n- [[其他概念]]\n- [[另一实体]]\n- [[test-source]]",
                 1
             ),
             encoding="utf-8",
@@ -1010,10 +1011,10 @@ class TestInlineWikilinkDensity:
 # --- sanitize_frontmatter ---
 
 class TestSanitizeFrontmatter:
-    """Tests for sanitize_frontmatter — ported from llm_wiki's ingest-sanitize.ts."""
+    """Tests for sanitize_frontmatter -- ported from llm_wiki's ingest-sanitize.ts."""
 
     def test_strips_outer_yaml_code_fence(self):
-        """LLM wraps entire page in ```yaml ... ``` — strip both fences."""
+        """LLM wraps entire page in ```yaml ... ``` -- strip both fences."""
         from lint_wiki import sanitize_frontmatter
         input_content = "```yaml\n---\ntype: concept\ntitle: Test\n---\n\n# Test\n```\n"
         expected = "---\ntype: concept\ntitle: Test\n---\n\n# Test\n"
@@ -1034,7 +1035,7 @@ class TestSanitizeFrontmatter:
         assert sanitize_frontmatter(input_content) == expected
 
     def test_repairs_wikilink_list_in_frontmatter(self):
-        """`related: [[a]], [[b]], [[c]]` is invalid YAML — fix to inline array."""
+        """`related: [[a]], [[b]], [[c]]` is invalid YAML -- fix to inline array."""
         from lint_wiki import sanitize_frontmatter
         input_content = "---\ntype: concept\ntitle: Test\nrelated: [[a]], [[b]], [[c]]\n---\n\n# Test\n"
         expected = "---\ntype: concept\ntitle: Test\nrelated: [\"[[a]]\", \"[[b]]\", \"[[c]]\"]\n---\n\n# Test\n"
@@ -1053,7 +1054,7 @@ class TestSanitizeFrontmatter:
         assert sanitize_frontmatter(input_content) == input_content
 
     def test_combined_fence_and_prefix(self):
-        """Both ```yaml wrapper AND frontmatter: prefix — strip both."""
+        """Both ```yaml wrapper AND frontmatter: prefix -- strip both."""
         from lint_wiki import sanitize_frontmatter
         input_content = "```yaml\nfrontmatter:\n---\ntype: entity\ntitle: Foo\n---\n\n# Foo\n```\n"
         expected = "---\ntype: entity\ntitle: Foo\n---\n\n# Foo\n"
@@ -1068,7 +1069,7 @@ class TestSanitizeFrontmatter:
 
 
 class TestSanitizeLintPass:
-    """Integration test: Pass 15 detects frontmatter issues and --fix repairs them."""
+    """Integration test: Pass 16 detects frontmatter issues and auto-fixes them."""
 
     def test_lint_detects_and_auto_fixes_code_fence(self, tmp_path):
         wiki = tmp_path / "test-wiki"
@@ -1103,3 +1104,149 @@ class TestSanitizeLintPass:
         # Verify the fix was written to disk
         fixed = bad_page.read_text(encoding="utf-8")
         assert fixed.startswith("---\ntype: concept")
+
+
+# --- pure-ASCII filename check ---
+
+class TestPureASCIIFilename:
+    def test_flags_english_concept_filename(self, tmp_path):
+        """Concept page with pure-ASCII (English) filename should be flagged."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Create a stub target for the inline wikilink to avoid dead-link failures
+        stub = wiki / "wiki" / "concepts" / "test-concept.md"
+        stub.write_text(
+            '---\ntitle: "Test"\ntype: concept\n---\nStub\n',
+            encoding="utf-8",
+        )
+        # Create a concept page with English-only filename
+        page = wiki / "wiki" / "concepts" / "smart-money-factor.md"
+        page.write_text(
+            '---\n'
+            'title: "Smart Money Factor"\n'
+            'title_zh: "聪明钱因子"\n'
+            'type: concept\n'
+            'summary: "A test concept"\n'
+            'tags: []\n'
+            'sources:\n'
+            '  - "[[test-source]]"\n'
+            'origin: agent-compiled\n'
+            'status: seed\n'
+            'created: 2026-05-21\n'
+            'updated: 2026-05-21\n'
+            'review_by: ""\n'
+            '---\n\n'
+            '# Smart Money Factor\n\n'
+            '## Definition\n\n'
+            'The [[test-concept]] smart money factor tracks institutional flow.\n',
+            encoding="utf-8",
+        )
+        # Add both to index
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "*(none yet)*", "- [[smart-money-factor]]\n- [[test-concept]]", 1
+            ),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 1
+        assert "ascii" in proc.stdout.lower() and ("pure-ascii" in proc.stdout.lower() or "pure ascii" in proc.stdout.lower())
+
+    def test_passes_chinese_filename(self, tmp_path):
+        """Concept page with Chinese filename should pass."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        # Create the source target so no dead wikilinks
+        (wiki / "wiki" / "sources" / "test-source.md").write_text(
+            '---\ntitle: "Source"\ntype: source\n---\nStub\n',
+            encoding="utf-8",
+        )
+        page = wiki / "wiki" / "concepts" / "聪明钱因子.md"
+        page.write_text(
+            '---\n'
+            'title: "聪明钱因子"\n'
+            'title_zh: "聪明钱因子"\n'
+            'type: concept\n'
+            'summary: "A test concept"\n'
+            'tags: []\n'
+            'sources:\n'
+            '  - "[[test-source]]"\n'
+            'origin: agent-compiled\n'
+            'status: seed\n'
+            'created: 2026-05-21\n'
+            'updated: 2026-05-21\n'
+            'review_by: ""\n'
+            '---\n\n'
+            '# 聪明钱因子\n\n'
+            '## 定义\n\n'
+            '聪明钱因子追踪机构资金流向。\n',
+            encoding="utf-8",
+        )
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "*(none yet)*", "- [[聪明钱因子]]\n- [[test-source]]", 1
+            ),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
+
+    def test_passes_source_english_filename(self, tmp_path):
+        """Source pages with English filenames should NOT be flagged."""
+        wiki = tmp_path / "mywiki"
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "scaffold.py"),
+             str(wiki), "Test Wiki"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        raw = wiki / "raw" / "articles" / "english-report.md"
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        raw.write_text("Content", encoding="utf-8")
+        import hashlib
+        page = wiki / "wiki" / "sources" / "english-report.md"
+        page.write_text(
+            '---\n'
+            'title: "English Report"\n'
+            'title_zh: ""\n'
+            'type: source\n'
+            'summary: "A test source"\n'
+            'tags: []\n'
+            'origin: agent-compiled\n'
+            'status: seed\n'
+            'created: 2026-05-21\n'
+            'updated: 2026-05-21\n'
+            'raw_path: "raw/articles/english-report.md"\n'
+            'raw_hash: "' + hashlib.sha256(b'Content').hexdigest() + '"\n'
+            'review_by: ""\n'
+            '---\n\n'
+            '# English Report\n\nContent\n',
+            encoding="utf-8",
+        )
+        index = wiki / "wiki" / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "*(none yet)*", "- [[english-report]]", 1
+            ),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "lint_wiki.py"), str(wiki)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        assert proc.returncode == 0
