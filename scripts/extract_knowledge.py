@@ -20,6 +20,8 @@ import argparse
 import json
 import re
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 
@@ -226,38 +228,44 @@ def main() -> int:
 
     # Call API
     print(f"Calling LLM API ({config['model']})...", file=sys.stderr)
-    try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=config["api_key"], base_url=config["base_url"])
 
-        response = client.messages.create(
-            model=config["model"],
-            max_tokens=4096,
-            temperature=0.1,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
-        )
-    except Exception as e:
-        # Retry once
-        print(f"WARNING: First API call failed: {e}", file=sys.stderr)
-        print("Retrying...", file=sys.stderr)
+    api_url = config["base_url"].rstrip("/") + "/v1/messages"
+    request_body = json.dumps({
+        "model": config["model"],
+        "max_tokens": 4096,
+        "temperature": 0.1,
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_message}],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        api_url,
+        data=request_body,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": config["api_key"],
+            "anthropic-version": "2023-06-01",
+        },
+    )
+
+    for attempt in range(2):
         try:
-            response = client.messages.create(
-                model=config["model"],
-                max_tokens=4096,
-                temperature=0.1,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_message}],
-            )
-        except Exception as e2:
-            print(f"ERROR: API call failed after retry: {e2}", file=sys.stderr)
-            return 1
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                resp_data = json.loads(resp.read().decode("utf-8"))
+            break
+        except Exception as e:
+            if attempt == 0:
+                print(f"WARNING: API call failed: {e}", file=sys.stderr)
+                print("Retrying...", file=sys.stderr)
+            else:
+                print(f"ERROR: API call failed after retry: {e}", file=sys.stderr)
+                return 1
 
     # Extract text from response
     response_text = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            response_text += block.text
+    for block in resp_data.get("content", []):
+        if block.get("type") == "text":
+            response_text += block.get("text", "")
 
     if not response_text.strip():
         print("ERROR: API returned empty response", file=sys.stderr)
