@@ -27,22 +27,50 @@ When a new source is added to `raw/`:
 
 **Execute immediately — do not pause for user confirmation.**
 
-1. Read the source file in full
-2. Create a source summary page:
+1. Run `extract_knowledge.py` to extract structured info from the article:
    ```
-   python scripts/create_page.py . source "<title>" --raw-path "raw/<path>" --compute-hash
+   python scripts/extract_knowledge.py . raw/articles/<filename>.md
    ```
-   Then edit to fill content
-3. For each new concept or entity, create a page:
+   This calls the LLM API independently (no conversation context cost).
+   Output: `wiki/meta/extract-<slug>.json`
+   If the script fails (exit code ≠ 0), fall back to reading the source file directly and extracting concepts manually.
+2. Read the extraction JSON (`wiki/meta/extract-<slug>.json`). Based on the JSON:
+   - Create a source summary page:
+     ```
+     python scripts/create_page.py . source "<title>" --raw-path "raw/<path>" --compute-hash
+     ```
+     Then edit to fill content. You may Read the original source file for detailed page content.
+   - For each concept/entity with `is_new=true` or `existing_page=null`: create a new page
+     ```
+     python scripts/create_page.py . <type> "<name>"
+     ```
+   - For each entity with `existing_page` set: cascade-update (see step 3)
+3. Cascade-update all existing concept/entity/synthesis pages that are relevant:
+   - **Frontmatter updates** (sources, tags, related) — use `merge_frontmatter.py`:
+     ```
+     python scripts/merge_frontmatter.py wiki/entities/<name>.md \
+       --sources "[[source1]],[[source2]]" \
+       --tags "tag1" \
+       --related "[[related-page]]"
+     ```
+     One Bash call per page handles all frontmatter array merging with deduplication.
+     Do NOT use Edit to append items to frontmatter arrays — use the script instead.
+   - **Body updates** (summary, timeline, related pages section, etc.) — use Edit as usual.
+4. Update `wiki/index.md` — add new pages under the correct section
+5. Update `wiki/overview.md` — revise the narrative overview to reflect new content. Ensure every new concept is mentioned in context with `[[wikilink]]`. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
+6. Update `hot.md` with the latest activity
+7. Run `ingest_finish.py` to write log and commit — this replaces manual log writing and git commands:
    ```
-   python scripts/create_page.py . <type> "<name>"
+   python scripts/ingest_finish.py . \
+     --title "<title>" \
+     --source "raw/<path>" \
+     --created "wiki/sources/a.md,wiki/concepts/b.md" \
+     --updated "wiki/entities/c.md" \
+     --notes "key concepts summary"
    ```
-4. Cascade-update all existing concept/entity/synthesis pages that are relevant
-5. Update `wiki/index.md` — add new pages under the correct section
-6. Append a log entry to `log/{date}.md`
-7. Update `hot.md` with the latest activity
-8. Update `wiki/overview.md` — revise the narrative overview to reflect new content. Ensure every new concept is mentioned in context with `[[wikilink]]`. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
-9. Briefly report what was done (files created/updated, key concepts added)
+   The script automatically appends to `log/{date}.md` and runs `git add + commit`.
+   Do NOT manually write log entries or run git add/commit after this step.
+8. Briefly report what was done (files created/updated, key concepts added)
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 
@@ -190,6 +218,8 @@ When deciding whether to create, update, split, or archive a page, follow these 
 
 ## Notes for the LLM
 
+- **Use extract_knowledge.py as the first step of every ingest.** Run it before reading the source file. It produces a JSON with concepts, entities, tags, and key findings. Use the JSON to plan page creation/updates. If it fails, fall back to reading the source file directly.
+- **Use merge_frontmatter.py for frontmatter array fields.** When updating entity/concept pages, do NOT Edit frontmatter to add sources/tags/related. Instead, call `python scripts/merge_frontmatter.py <page> --sources "..." --tags "..." --related "..."`. The script handles dedup and updates the `updated` date. Only use Edit for body content changes (summary, timeline, related pages section, etc.).
 - Depth: adjust based on the question — brief for overviews, detailed for deep-dives
 - When uncertain about a fact, note it explicitly rather than guessing; flag it for audit
 - Never overwrite pages with `origin: self-written` — these contain the user's own thinking
