@@ -25,6 +25,40 @@ import urllib.error
 from pathlib import Path
 
 
+def resolve_article_path(wiki_root: Path, *, use_next: bool = False, raw_article: str = "") -> str | None:
+    """Resolve which article to process.
+
+    If use_next=True, find the first unprocessed article (no source page).
+    Otherwise return the explicit raw_article path.
+    Returns None if no unprocessed article found.
+    """
+    if not use_next:
+        return raw_article
+
+    raw_dir = wiki_root / "raw" / "articles"
+    sources_dir = wiki_root / "wiki" / "sources"
+
+    if not raw_dir.exists():
+        return None
+
+    # Collect processed raw_paths from source page frontmatters
+    processed = set()
+    if sources_dir.exists():
+        for source_file in sources_dir.glob("*.md"):
+            text = source_file.read_text(encoding="utf-8")
+            m = re.search(r"^raw_path:\s*(.+)$", text, re.MULTILINE)
+            if m:
+                processed.add(m.group(1).strip().strip('"').strip("'"))
+
+    # Find first unprocessed article
+    for article in sorted(raw_dir.glob("*.md")):
+        rel_path = f"raw/articles/{article.name}"
+        if rel_path not in processed:
+            return rel_path
+
+    return None
+
+
 def derive_slug(raw_path: str) -> str:
     """Derive a URL-safe slug from the raw article filename.
 
@@ -194,13 +228,24 @@ def main() -> int:
         description="Extract structured knowledge from an article via LLM API."
     )
     parser.add_argument("wiki_root", help="Path to the wiki root directory")
-    parser.add_argument("raw_article", help="Path to the raw article file (relative to wiki-root)")
+    parser.add_argument("raw_article", nargs="?", default=None,
+                        help="Path to the raw article file (relative to wiki-root)")
+    parser.add_argument("--next", action="store_true",
+                        help="Auto-find and process the first unprocessed article")
     args = parser.parse_args()
 
     wiki_root = Path(args.wiki_root).resolve()
-    raw_path = wiki_root / args.raw_article
 
-    # Validate inputs
+    # Resolve which article to process
+    use_next = args.next or args.raw_article is None
+    rel_path = resolve_article_path(wiki_root, use_next=use_next, raw_article=args.raw_article or "")
+    if rel_path is None:
+        print("No unprocessed articles found.", file=sys.stderr)
+        return 1
+
+    raw_path = wiki_root / rel_path
+    print(f"Processing: {rel_path}", file=sys.stderr)
+
     if not raw_path.exists():
         print(f"ERROR: Article not found: {raw_path}", file=sys.stderr)
         return 1
@@ -279,7 +324,7 @@ def main() -> int:
         return 1
 
     # Write output
-    slug = derive_slug(args.raw_article)
+    slug = derive_slug(rel_path)
     meta_dir = wiki_root / "wiki" / "meta"
     meta_dir.mkdir(parents=True, exist_ok=True)
     output_path = meta_dir / f"extract-{slug}.json"

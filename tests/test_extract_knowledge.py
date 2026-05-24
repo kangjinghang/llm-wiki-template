@@ -7,7 +7,7 @@ from pathlib import Path
 # Add scripts/ to path so we can import functions
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from extract_knowledge import load_api_config, extract_claude_md_sections, build_extraction_prompt, parse_llm_response, derive_slug
+from extract_knowledge import load_api_config, extract_claude_md_sections, build_extraction_prompt, parse_llm_response, derive_slug, resolve_article_path
 
 
 class TestDeriveSlug:
@@ -143,4 +143,72 @@ class TestParseLlmResponse:
         """Return None for unparseable text."""
         text = "This is not JSON at all"
         result = parse_llm_response(text)
+        assert result is None
+
+
+class TestResolveArticlePath:
+    """Test --next flag: find first unprocessed article path."""
+
+    def test_next_finds_unprocessed(self, tmp_path):
+        """--next returns the first unprocessed article relative path."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+        sources_dir = tmp_path / "wiki" / "sources"
+        sources_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+        (raw_dir / "[20200102]beta.md").write_text("B", encoding="utf-8")
+
+        result = resolve_article_path(tmp_path, use_next=True)
+        assert result == "raw/articles/[20200101]alpha.md"
+
+    def test_next_skips_processed(self, tmp_path):
+        """--next skips articles that have source pages."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+        sources_dir = tmp_path / "wiki" / "sources"
+        sources_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+        (raw_dir / "[20200102]beta.md").write_text("B", encoding="utf-8")
+
+        # Mark alpha as processed
+        (sources_dir / "alpha.md").write_text(
+            '---\nraw_path: "raw/articles/[20200101]alpha.md"\n---\n', encoding="utf-8"
+        )
+
+        result = resolve_article_path(tmp_path, use_next=True)
+        assert result == "raw/articles/[20200102]beta.md"
+
+    def test_next_returns_none_when_all_processed(self, tmp_path):
+        """--next returns None when all articles have source pages."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+        sources_dir = tmp_path / "wiki" / "sources"
+        sources_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+        (sources_dir / "alpha.md").write_text(
+            '---\nraw_path: "raw/articles/[20200101]alpha.md"\n---\n', encoding="utf-8"
+        )
+
+        result = resolve_article_path(tmp_path, use_next=True)
+        assert result is None
+
+    def test_explicit_path_ignores_unprocessed(self, tmp_path):
+        """Explicit raw_article path is returned as-is (no --next logic)."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+
+        result = resolve_article_path(tmp_path, use_next=False, raw_article="raw/articles/[20200101]alpha.md")
+        assert result == "raw/articles/[20200101]alpha.md"
+
+    def test_next_returns_none_when_empty(self, tmp_path):
+        """--next returns None when no raw articles exist."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+
+        result = resolve_article_path(tmp_path, use_next=True)
         assert result is None
