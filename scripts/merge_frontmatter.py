@@ -187,6 +187,13 @@ def main() -> int:
         return 1
 
     content = page_path.read_text(encoding="utf-8")
+
+    # Validate input args: reject [[[ syntax
+    for arg_val in [args.sources, args.tags, args.related]:
+        if arg_val and "[[[" in arg_val:
+            print("ERROR: Input contains [[[ syntax (should be [[). Fix wikilinks.", file=sys.stderr)
+            return 1
+
     fm, body, raw_fm = parse_frontmatter(content)
 
     if fm is None:
@@ -219,6 +226,11 @@ def main() -> int:
     if not changed:
         print(f"No changes needed: {page_path}")
         return 0
+
+    # Validate: reject [[[ wikilink syntax
+    if "[[[" in raw_fm:
+        print("ERROR: Result contains [[[ syntax (should be [[). Fix wikilinks before merging.", file=sys.stderr)
+        return 1
 
     # Update the `updated` date
     today = date.today().isoformat()

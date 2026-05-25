@@ -89,3 +89,31 @@ class TestSerializeFrontmatter:
         fm, body, raw_fm = parse_frontmatter(content)
         result = serialize_frontmatter(raw_fm, body)
         assert result == content
+
+
+class TestTripleBracketRejection:
+    def test_rejects_triple_bracket_in_sources_arg(self, tmp_path):
+        """Reject --sources containing [[[ syntax."""
+        page = tmp_path / "test.md"
+        page.write_text('---\ntitle: "Test"\nsources:\n  - "[[a]]"\n---\nBody\n', encoding="utf-8")
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "merge_frontmatter.py"),
+             str(page), "--sources", "[[[bad]]]"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 1
+        assert "[[[" in proc.stderr
+
+    def test_rejects_triple_bracket_in_related_arg(self, tmp_path):
+        """Reject --related containing [[[ syntax."""
+        page = tmp_path / "test.md"
+        page.write_text('---\ntitle: "Test"\nrelated:\n  - "[[a]]"\n---\nBody\n', encoding="utf-8")
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "merge_frontmatter.py"),
+             str(page), "--related", "[[[bad]]]"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 1
+        assert "[[[" in proc.stderr
