@@ -167,7 +167,19 @@ def main() -> int:
         print(f"ERROR: Page already exists: {out_path}", file=sys.stderr)
         return 1
 
-    # Parse optional arguments
+    # Parse optional arguments — auto-fix [[[ wikilink syntax from LLM
+    if args.sources and "[[[" in args.sources:
+        print("WARNING: Auto-fixing [[[ → [[ in --sources", file=sys.stderr)
+        args.sources = args.sources.replace("[[[", "[[").replace("]]]", "]]")
+    if args.tags and "[[[" in args.tags:
+        print("WARNING: Auto-fixing [[[ → [[ in --tags", file=sys.stderr)
+        args.tags = args.tags.replace("[[[", "[[").replace("]]]", "]]")
+    if args.content and "[[[" in args.content:
+        print("WARNING: Auto-fixing [[[ → [[ in --content", file=sys.stderr)
+        args.content = args.content.replace("[[[", "[[").replace("]]]", "]]")
+    if args.summary and "[[[" in args.summary:
+        print("WARNING: Auto-fixing [[[ → [[ in --summary", file=sys.stderr)
+        args.summary = args.summary.replace("[[[", "[[").replace("]]]", "]]")
     tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
     sources = [s.strip() for s in args.sources.split(",")] if args.sources else []
     today = date.today().isoformat()
@@ -208,11 +220,6 @@ def main() -> int:
         parts = content.split("---", 2)
         if len(parts) >= 3:
             content = "---" + parts[1] + "---\n" + args.content.lstrip("\n") + "\n"
-
-    # Validate content: reject [[[ wikilink syntax
-    if args.content and "[[[" in args.content:
-        print("ERROR: Content contains [[[ syntax (should be [[). Fix wikilinks before creating.", file=sys.stderr)
-        return 1
 
     # Validate wikilinks in content: warn on links to non-existent pages
     if args.content:
