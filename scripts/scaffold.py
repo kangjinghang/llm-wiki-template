@@ -9,7 +9,7 @@ Example:
     python3 scaffold.py ~/wikis/ai-research "AI Research"
 
 Creates a complete wiki directory with CLAUDE.md, scripts, templates,
-and initial files (index.md, hot.md, questions.md).
+and initial files (index.md, wiki/overview.md).
 """
 
 import os
@@ -57,7 +57,10 @@ def scaffold(root: str, title: str) -> None:
 
     # Copy scripts from template repo
     script_src = Path(__file__).resolve().parent
-    for script_name in ["scaffold.py", "create_page.py", "lint_wiki.py", "audit_review.py"]:
+    for script_name in [
+        "scaffold.py", "create_page.py", "lint_wiki.py", "audit_review.py",
+        "extract_knowledge.py", "merge_frontmatter.py", "ingest_finish.py",
+    ]:
         src = script_src / script_name
         if src.exists():
             shutil.copy2(src, root_path / "scripts" / script_name)
@@ -93,13 +96,13 @@ def scaffold(root: str, title: str) -> None:
 Then follow the ingest workflow defined in CLAUDE.md — execute immediately without pausing for confirmation:
 1. Read the source file in full
 2. Create source summary page with `--raw-path` AND `--compute-hash`, concept/entity pages, cascade updates
-3. Update wiki/index.md, log/{{date}}.md, hot.md, wiki/overview.md
+3. Update wiki/index.md, log/{{date}}.md, wiki/overview.md
 4. Briefly report what was done
 """)
     _write(root_path, ".claude/commands/query.md", f"""Answer the following question using the wiki: $ARGUMENTS
 
 Follow the query workflow defined in CLAUDE.md:
-1. Read hot.md first to orient
+1. Read wiki/index.md first to orient
 2. Read wiki/index.md to find relevant pages
 3. Drill into specific pages for details
 4. Synthesize an answer with [[page-name]] citations
@@ -174,9 +177,13 @@ Follow the audit workflow defined in CLAUDE.md:
 
 *(none yet)*
 
+## Active Threads
+
+*(none yet)*
+
 ## Open Questions
 
-- <First research question>
+*(none yet)*
 """
     _write(root_path, "wiki/index.md", index_md)
     print("Created wiki/index.md")
@@ -191,48 +198,10 @@ Follow the audit workflow defined in CLAUDE.md:
         f"## 关键发现\n\n"
         f"<!-- 按 Source 归纳最重要的结论 -->\n\n"
         f"## 开放问题\n\n"
-        f"<!-- 从 questions.md 汇总 -->\n",
+        f"<!-- 从 wiki/index.md Open Questions 汇总 -->\n",
         encoding="utf-8",
     )
     print(f"  Created {overview}")
-
-    # hot.md
-    hot_md = f"""# Hot Cache
-
-> Recent activity summary. Read at session start. Update at session end.
-
-## Recently Ingested
-
-*(none yet)*
-
-## Recently Queried
-
-*(none yet)*
-
-## Active Threads
-
-*(none yet)*
-
-## Open Questions
-
-*(none yet)*
-"""
-    _write(root_path, "hot.md", hot_md)
-    print("Created hot.md")
-
-    # questions.md
-    questions_md = """# Open Questions
-
-## Active
-
-*(none yet)*
-
-## Resolved
-
-*(none yet)*
-"""
-    _write(root_path, "questions.md", questions_md)
-    print("Created questions.md")
 
     # log/<today>.md
     log_md = f"""# {today_iso}
@@ -240,7 +209,7 @@ Follow the audit workflow defined in CLAUDE.md:
 ## [{now_hm}] scaffold | Initialized {title} knowledge base
 - Created directory tree (raw/, wiki/, log/, audit/, scripts/, _templates/)
 - Created CLAUDE.md schema
-- Created wiki/index.md, hot.md, questions.md
+- Created wiki/index.md, wiki/overview.md
 - Copied scripts and templates
 """
     _write(root_path, f"log/{today_iso}.md", log_md)

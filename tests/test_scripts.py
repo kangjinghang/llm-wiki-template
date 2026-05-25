@@ -228,10 +228,14 @@ class TestScaffoldAndLint:
         assert proc.returncode == 0, proc.stderr
         assert (wiki / "CLAUDE.md").exists()
         assert (wiki / "wiki" / "index.md").exists()
-        assert (wiki / "hot.md").exists()
-        assert (wiki / "questions.md").exists()
+        # hot.md and questions.md removed — content merged into index.md
+        assert not (wiki / "hot.md").exists()
+        assert not (wiki / "questions.md").exists()
         assert (wiki / "raw" / "articles").is_dir()
         assert (wiki / "wiki" / "concepts").is_dir()
+        index_text = (wiki / "wiki" / "index.md").read_text(encoding="utf-8")
+        assert "## Active Threads" in index_text
+        assert "## Open Questions" in index_text
 
     def test_lint_runs_without_crash_on_scaffold(self, tmp_path):
         wiki = tmp_path / "mywiki"

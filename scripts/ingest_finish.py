@@ -95,7 +95,7 @@ def main() -> int:
 
     # Git commit
     if not args.no_commit:
-        subprocess.run(["git", "add", "wiki/", "log/"], cwd=str(wiki_root), check=True)
+        subprocess.run(["git", "add", "-A"], cwd=str(wiki_root), check=True)
         subprocess.run(["git", "commit", "-m", f"ingest: {args.title}"], cwd=str(wiki_root), check=True)
         print(f"Committed: ingest: {args.title}")
 

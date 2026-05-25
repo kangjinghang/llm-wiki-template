@@ -24,7 +24,7 @@ review_by: ""
 
 ## 开放问题
 
-<!-- 从 questions.md 和各页面的 Claims to Verify 汇总 -->
+<!-- 从 wiki/index.md Open Questions 和各页面的 Claims to Verify 汇总 -->
 
 <!-- human:start -->
 ## 个人笔记

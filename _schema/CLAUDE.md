@@ -38,12 +38,12 @@ When a new source is added to `raw/`:
 2. Read the extraction JSON (`wiki/meta/extract-<slug>.json`). Based on the JSON:
    - Create a source summary page:
      ```
-     python scripts/create_page.py . source "<title>" --raw-path "raw/<path>" --compute-hash
+     python scripts/create_page.py . source "<title>" --raw-path "raw/<path>" --compute-hash --summary "summary text" --content "body content"
      ```
-     Then edit to fill content using the extraction JSON. Do NOT read the original raw article — the JSON has all the information needed.
+     Use `--summary` and `--content` to fill the page in one call. Do NOT read the original raw article — the JSON has all the information needed.
    - For each concept/entity with `is_new=true` or `existing_page=null`: create a new page
      ```
-     python scripts/create_page.py . <type> "<name>"
+     python scripts/create_page.py . <type> "<name>" --summary "summary" --content "body"
      ```
    - For each entity with `existing_page` set: cascade-update (see step 3)
 3. Cascade-update all existing concept/entity/synthesis pages that are relevant:
@@ -70,7 +70,7 @@ When a new source is added to `raw/`:
    ```
    The script automatically appends to `log/{date}.md` and runs `git add + commit`.
    Do NOT manually write log entries or run git add/commit after this step.
-8. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
+7. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 
@@ -86,7 +86,7 @@ When answering questions:
 
 **When to file an answer back as a new page:**
 - The answer synthesizes 2+ existing wiki pages into a new comparison or analysis
-- The answer resolves an open question from `questions.md`
+- The answer resolves an open question from the Open Questions section of `wiki/index.md`
 - The user explicitly says "save this" or "add this to the wiki"
 
 When filing back, create a synthesis page and update `wiki/index.md`.
@@ -125,7 +125,6 @@ Without this loop, errors in the wiki compound silently. With it, the wiki gets 
 ```
 wiki-root/
 ├── CLAUDE.md            ← this file
-├── questions.md         ← open research questions queue
 ├── raw/                 ← immutable source documents
 │   ├── articles/
 │   ├── papers/
@@ -207,7 +206,7 @@ When deciding whether to create, update, split, or archive a page, follow these 
 - **Body text**: write summaries and analysis in Chinese
 - **Technical terms**: keep original English; annotate Chinese on first appearance (e.g. Transformer（变换器）, Attention（注意力机制）)
 - **Section headings**: bilingual — `English / 中文` (e.g. `## Definition / 定义`)
-- **Contradictions**: present both views with citations; do not arbitrate. Add to `questions.md` if unresolved.
+- **Contradictions**: present both views with citations; do not arbitrate. Add to the Open Questions section of `wiki/index.md` if unresolved.
 - **Diagrams**: use **Mermaid** syntax
 - **Formulas**: use **KaTeX** (`$inline$` or `$$block$$`)
 - **Provenance markers**: on pages that synthesize 3+ sources, append `^[raw/path/to/source.md]` at the end of paragraphs whose claims come from a specific source. This lets readers trace each claim without re-reading the raw file. Single-source pages don't need this — the `sources` frontmatter is sufficient.

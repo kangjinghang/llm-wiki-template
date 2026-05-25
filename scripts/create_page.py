@@ -17,6 +17,8 @@ Options:
     --raw-path "path"         Raw source file path (source type only)
     --compute-hash            Compute SHA256 of raw_path file and add to frontmatter
     --review-by "YYYY-MM-DD"   Review-by date for time-sensitive content (optional)
+    --summary "text"          Summary text for frontmatter (optional)
+    --content "text"          Body content, replaces template body (optional)
 
 Examples:
     python3 create_page.py . concept "Attention Mechanism" --title-zh "注意力机制" --tags "AI,Deep-Learning"
@@ -128,6 +130,8 @@ def main() -> int:
     parser.add_argument("--raw-path", default=None, help="Raw source file path (source type only)")
     parser.add_argument("--compute-hash", action="store_true", help="Compute SHA256 of raw_path file and add to frontmatter")
     parser.add_argument("--review-by", default=None, help="Review-by date (YYYY-MM-DD) for time-sensitive content")
+    parser.add_argument("--summary", default=None, help="Summary text for frontmatter")
+    parser.add_argument("--content", default=None, help="Body content (replaces template body)")
     args = parser.parse_args()
 
     wiki_root = Path(args.wiki_root).resolve()
@@ -194,6 +198,37 @@ def main() -> int:
         parts = content.split("---", 2)
         if len(parts) >= 3:
             content = "---" + parts[1].rstrip() + f'\nraw_hash: "{raw_hash}"\n---' + parts[2]
+
+    # Fill summary in frontmatter if provided
+    if args.summary:
+        content = fill_fm_field(content, "summary", f'"{args.summary}"')
+
+    # Replace body content if --content provided
+    if args.content is not None:
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            content = "---" + parts[1] + "---\n" + args.content.lstrip("\n") + "\n"
+
+    # Validate content: reject [[[ wikilink syntax
+    if args.content and "[[[" in args.content:
+        print("ERROR: Content contains [[[ syntax (should be [[). Fix wikilinks before creating.", file=sys.stderr)
+        return 1
+
+    # Validate wikilinks in content: warn on links to non-existent pages
+    if args.content:
+        wikilinks = re.findall(r'\[\[([^\]]+)\]\]', args.content)
+        if wikilinks:
+            wiki_dir = wiki_root / "wiki"
+            existing_pages = set()
+            for subdir in ["sources", "concepts", "entities", "syntheses"]:
+                d = wiki_dir / subdir
+                if d.exists():
+                    for p in d.glob("*.md"):
+                        existing_pages.add(p.stem)
+            for link in wikilinks:
+                link_slug = slugify(link)
+                if link_slug not in existing_pages and link_slug != slugify(args.title):
+                    print(f"WARNING: wikilink [[{link}]] has no target page. Create it or remove the link.", file=sys.stderr)
 
     # Write file
     out_dir.mkdir(parents=True, exist_ok=True)

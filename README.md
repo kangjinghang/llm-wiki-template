@@ -40,8 +40,6 @@ After scaffolding, your wiki directory looks like this:
 ```
 my-topic/
 ├── CLAUDE.md            ← schema: tells the LLM how to operate the wiki
-├── hot.md               ← session cache: read first on every session
-├── questions.md         ← open research questions
 ├── raw/                 ← your source documents (immutable)
 │   ├── articles/
 │   ├── papers/
