@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-merge_frontmatter.py — Deterministically merge array fields into wiki page frontmatter.
+merge_frontmatter.py — Deterministically merge array fields and body sections into wiki pages.
 
-Replaces multiple LLM Edit calls for adding sources/tags/related to entity
-and concept pages with a single Bash call.
+Replaces multiple LLM Edit calls for adding sources/tags/related, related pages sections,
+and timeline entries with a single Bash call.
 
 Usage:
     python3 merge_frontmatter.py <page-path> \
       --sources "[[新来源1]],[[新来源2]]" \
       --tags "新标签" \
-      --related "[[关联页面]]"
+      --related "[[关联页面]]" \
+      --related-pages "[[Foo]] — desc1||[[Bar]] — desc2" \
+      --timeline "2021.06：《Title》（Authors）——desc"
 
 Exit codes:
     0 — success
@@ -166,6 +168,169 @@ def merge_array_field(raw_fm: str, field: str, new_items: list[str]) -> str:
     return "\n".join(result_lines)
 
 
+def _extract_wikilink_target(entry: str) -> str:
+    """Extract first [[...]] target from an entry for deduplication."""
+    m = re.search(r"\[\[([^\]]+)\]\]", entry)
+    return m.group(1) if m else ""
+
+
+def _find_section_end(body: str, start: int) -> int:
+    """Find the start of the next ## heading after position start, or EOF."""
+    idx = body.find("\n## ", start + 1)
+    return idx if idx != -1 else len(body)
+
+
+def _find_related_pages_insert_point(body: str) -> int:
+    """Find insert point before Sources/Notes heading, or EOF."""
+    for marker in ["\n## Sources / 来源", "\n## Sources", "\n## Notes / 笔记", "\n## Notes"]:
+        idx = body.find(marker)
+        if idx != -1:
+            return idx
+    return len(body)
+
+
+def merge_related_pages_section(body: str, entries: list[str]) -> tuple[str, bool]:
+    """Append entries to ## Related Pages / 关联页面 section.
+
+    Deduplicates by wikilink target. Creates the section if missing
+    (inserted before Sources/Notes/EOF).
+
+    Returns (updated_body, changed).
+    """
+    if not entries:
+        return body, False
+
+    # Try both heading variants
+    section_markers = ["## Related Pages / 关联页面", "## Related Pages"]
+    section_start = -1
+    for marker in section_markers:
+        idx = body.find(marker)
+        if idx != -1:
+            section_start = idx
+            break
+
+    if section_start == -1:
+        # Create section before Sources/Notes/EOF
+        insert_pos = _find_related_pages_insert_point(body)
+        new_section = "\n## Related Pages / 关联页面\n"
+        for entry in entries:
+            new_section += f"\n- {entry}"
+        new_section += "\n"
+        body = body[:insert_pos] + new_section + body[insert_pos:]
+        return body, True
+
+    section_end = _find_section_end(body, section_start)
+
+    # Extract existing wikilink targets in the section
+    section_text = body[section_start:section_end]
+    existing_targets = set()
+    for m in re.finditer(r"\[\[([^\]]+)\]\]", section_text):
+        existing_targets.add(m.group(1))
+
+    # Filter new entries by dedup
+    to_add = []
+    for entry in entries:
+        target = _extract_wikilink_target(entry)
+        if target and target in existing_targets:
+            continue
+        to_add.append(entry)
+        if target:
+            existing_targets.add(target)
+
+    if not to_add:
+        return body, False
+
+    # Append entries before section end
+    lines_to_add = "".join(f"\n- {entry}" for entry in to_add)
+    body = body[:section_end] + lines_to_add + body[section_end:]
+    return body, True
+
+
+def merge_timeline_entries(body: str, entries: list[str]) -> tuple[str, bool]:
+    """Append entries to - 研究时间线： sublist in ## Key Facts / 关键事实.
+
+    Deduplicates by exact text. Creates the sublist if missing.
+    Returns unchanged if no Key Facts section exists.
+
+    Returns (updated_body, changed).
+    """
+    if not entries:
+        return body, False
+
+    # Find Key Facts section
+    kf_markers = ["## Key Facts / 关键事实", "## Key Facts"]
+    kf_start = -1
+    for marker in kf_markers:
+        idx = body.find(marker)
+        if idx != -1:
+            kf_start = idx
+            break
+
+    if kf_start == -1:
+        # No Key Facts section — don't create one, just skip
+        return body, False
+
+    kf_end = _find_section_end(body, kf_start)
+    section_text = body[kf_start:kf_end]
+
+    # Find timeline sublist
+    timeline_idx = section_text.find("- 研究时间线：")
+    if timeline_idx == -1:
+        # No timeline sublist yet — skip (don't create structure from scratch)
+        return body, False
+
+    # Find existing entries in the timeline sublist (indented lines after the marker)
+    existing_entries = set()
+    pos = timeline_idx + len("- 研究时间线：")
+    for line in section_text[pos:].split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            existing_entries.add(stripped[2:])
+        elif stripped and not stripped.startswith("-") and not stripped.startswith("#"):
+            break
+
+    to_add = [e for e in entries if e not in existing_entries]
+    if not to_add:
+        return body, False
+
+    # Find the absolute position of the timeline marker in body
+    abs_timeline = kf_start + timeline_idx
+    # Find the end of the timeline sublist
+    abs_pos = abs_timeline + len("- 研究时间线：")
+    lines = body[abs_pos:].split("\n")
+    sublist_end_offset = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if i == 0:
+            # First line after the marker — might be content on same line or empty
+            continue
+        if stripped.startswith("- "):
+            sublist_end_offset += len(lines[i - 1]) + 1  # +1 for \n
+            continue
+        if stripped == "":
+            sublist_end_offset += len(lines[i - 1]) + 1 if i > 0 else 0
+            break
+        break
+
+    # Recalculate: find end of indented sublist items
+    after_marker = body[abs_timeline:]
+    sublist_lines = after_marker[len("- 研究时间线："):].split("\n")
+    insert_offset = 0
+    for i, line in enumerate(sublist_lines):
+        if line.strip().startswith("- "):
+            insert_offset += len(line) + 1  # +1 for \n
+        elif i == 0 and line.strip() == "":
+            # Empty line right after marker
+            continue
+        else:
+            break
+
+    abs_insert = abs_timeline + len("- 研究时间线：") + insert_offset
+    lines_to_add = "".join(f"\n  - {entry}" for entry in to_add)
+    body = body[:abs_insert] + lines_to_add + body[abs_insert:]
+    return body, True
+
+
 def serialize_frontmatter(raw_fm: str, body: str) -> str:
     """Reassemble file content from raw frontmatter and body."""
     return "---" + raw_fm + "---" + body
@@ -179,6 +344,10 @@ def main() -> int:
     parser.add_argument("--sources", default=None, help="Comma-separated source names to append")
     parser.add_argument("--tags", default=None, help="Comma-separated tags to append")
     parser.add_argument("--related", default=None, help="Comma-separated related page slugs to append")
+    parser.add_argument("--related-pages", default=None,
+                        help="||-separated Related Pages section entries, e.g. '[[Foo]] — desc1||[[Bar]] — desc2'")
+    parser.add_argument("--timeline", default=None,
+                        help="||-separated timeline entries, e.g. '2021.06：《Title》（Authors）——desc'")
     args = parser.parse_args()
 
     page_path = Path(args.page_path).resolve()
@@ -188,17 +357,23 @@ def main() -> int:
 
     content = page_path.read_text(encoding="utf-8")
 
-    # Validate input args: reject [[[ syntax
-    for arg_val in [args.sources, args.tags, args.related]:
-        if arg_val and "[[[" in arg_val:
-            print("ERROR: Input contains [[[ syntax (should be [[). Fix wikilinks.", file=sys.stderr)
-            return 1
+    # Auto-fix [[[ wikilink syntax from LLM (input args)
+    for attr in ["sources", "tags", "related", "related_pages", "timeline"]:
+        val = getattr(args, attr)
+        if val and "[[[" in val:
+            print(f"WARNING: Auto-fixing [[[ → [[ in --{attr}", file=sys.stderr)
+            setattr(args, attr, val.replace("[[[", "[[").replace("]]]", "]]"))
 
     fm, body, raw_fm = parse_frontmatter(content)
 
     if fm is None:
         print(f"ERROR: No frontmatter found in {page_path}", file=sys.stderr)
         return 1
+
+    # Auto-fix [[[ wikilink syntax in existing frontmatter
+    if "[[[" in raw_fm:
+        print("WARNING: Auto-fixing [[[ → [[ in existing frontmatter", file=sys.stderr)
+        raw_fm = raw_fm.replace("[[[", "[[").replace("]]]", "]]")
 
     changed = False
 
@@ -223,14 +398,27 @@ def main() -> int:
         if raw_fm != before:
             changed = True
 
+    # Body operations
+    if args.related_pages:
+        new_rp = [e.strip() for e in args.related_pages.split("||") if e.strip()]
+        body, body_changed = merge_related_pages_section(body, new_rp)
+        if body_changed:
+            changed = True
+
+    if args.timeline:
+        new_tl = [e.strip() for e in args.timeline.split("||") if e.strip()]
+        body, body_changed = merge_timeline_entries(body, new_tl)
+        if body_changed:
+            changed = True
+
     if not changed:
         print(f"No changes needed: {page_path}")
         return 0
 
-    # Validate: reject [[[ wikilink syntax
+    # Auto-fix any remaining [[[ in result (shouldn't happen, but safety net)
     if "[[[" in raw_fm:
-        print("ERROR: Result contains [[[ syntax (should be [[). Fix wikilinks before merging.", file=sys.stderr)
-        return 1
+        print("WARNING: Auto-fixing [[[ → [[ in merged frontmatter", file=sys.stderr)
+        raw_fm = raw_fm.replace("[[[", "[[").replace("]]]", "]]")
 
     # Update the `updated` date
     today = date.today().isoformat()
