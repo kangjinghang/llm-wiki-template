@@ -1,8 +1,11 @@
 """Tests for extract_knowledge.py script."""
 
 import json
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add scripts/ to path so we can import functions
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
@@ -46,19 +49,94 @@ class TestLoadApiConfig:
             assert config["base_url"] == "https://api.test.com"
             assert config["model"] == "test-model"
 
-    def test_missing_settings_file(self):
-        """Return None when settings file doesn't exist."""
+    def test_missing_settings_file(self, monkeypatch):
+        """Return None when settings file doesn't exist and no env vars set."""
+        monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_DEFAULT_OPUS_MODEL", raising=False)
         config = load_api_config(Path("/nonexistent/settings.json"))
         assert config is None
 
-    def test_missing_env_field(self):
-        """Return None when settings has no env field."""
+    def test_missing_env_field(self, monkeypatch):
+        """Return None when settings has no env field and no env vars set."""
+        monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_DEFAULT_OPUS_MODEL", raising=False)
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             settings_path = Path(tmp) / "settings.json"
             settings_path.write_text('{"model": "opus"}', encoding="utf-8")
             config = load_api_config(settings_path)
             assert config is None
+
+    def test_fallback_to_env_vars(self, tmp_path, monkeypatch):
+        """Fall back to os.environ when settings.json is missing."""
+        settings_path = tmp_path / "nonexistent.json"
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-key-456")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.api.test.com")
+        monkeypatch.setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "env-model")
+        config = load_api_config(settings_path)
+        assert config is not None
+        assert config["api_key"] == "env-key-456"
+        assert config["base_url"] == "https://env.api.test.com"
+        assert config["model"] == "env-model"
+
+    def test_env_vars_fill_missing_settings_fields(self, tmp_path, monkeypatch):
+        """Env vars fill in fields missing from settings.json."""
+        settings = {
+            "env": {
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "file-model",
+            }
+        }
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-key")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.api.test.com")
+        monkeypatch.delenv("ANTHROPIC_DEFAULT_OPUS_MODEL", raising=False)
+        config = load_api_config(settings_path)
+        assert config is not None
+        assert config["api_key"] == "env-key"
+        assert config["base_url"] == "https://env.api.test.com"
+        assert config["model"] == "file-model"  # from settings.json, not env
+
+    def test_settings_take_priority_over_env(self, tmp_path, monkeypatch):
+        """settings.json values take priority over env vars."""
+        settings = {
+            "env": {
+                "ANTHROPIC_AUTH_TOKEN": "file-key",
+                "ANTHROPIC_BASE_URL": "https://file.api.test.com",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "file-model",
+            }
+        }
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-key")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.api.test.com")
+        monkeypatch.setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "env-model")
+        config = load_api_config(settings_path)
+        assert config["api_key"] == "file-key"
+        assert config["base_url"] == "https://file.api.test.com"
+        assert config["model"] == "file-model"
+
+    def test_partial_env_vars_still_none(self, tmp_path, monkeypatch):
+        """Return None when neither settings nor env has all required fields."""
+        settings_path = tmp_path / "nonexistent.json"
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-key")
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_DEFAULT_OPUS_MODEL", raising=False)
+        config = load_api_config(settings_path)
+        assert config is None
+
+    def test_malformed_settings_json_falls_back(self, tmp_path, monkeypatch):
+        """Fall back to env vars when settings.json is malformed."""
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text("not valid json{{", encoding="utf-8")
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-key")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.api.test.com")
+        monkeypatch.setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "env-model")
+        config = load_api_config(settings_path)
+        assert config is not None
+        assert config["api_key"] == "env-key"
 
 
 class TestExtractClaudeMdSections:

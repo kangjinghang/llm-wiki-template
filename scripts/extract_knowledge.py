@@ -18,6 +18,7 @@ Exit codes:
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.request
@@ -71,20 +72,26 @@ def derive_slug(raw_path: str) -> str:
 
 
 def load_api_config(settings_path: Path) -> dict | None:
-    """Load API config from ~/.claude/settings.json.
+    """Load API config from ~/.claude/settings.json, falling back to env vars.
+
+    Resolution order for each field:
+      1. settings.json → env.ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL / ANTHROPIC_DEFAULT_OPUS_MODEL
+      2. Process environment variables (same names)
 
     Returns dict with api_key, base_url, model or None on failure.
     """
-    if not settings_path.exists():
-        return None
-    try:
-        data = json.loads(settings_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    env = data.get("env", {})
-    api_key = env.get("ANTHROPIC_AUTH_TOKEN")
-    base_url = env.get("ANTHROPIC_BASE_URL")
-    model = env.get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+    file_env: dict = {}
+    if settings_path.exists():
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            file_env = data.get("env", {})
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    api_key = file_env.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    base_url = file_env.get("ANTHROPIC_BASE_URL") or os.environ.get("ANTHROPIC_BASE_URL")
+    model = file_env.get("ANTHROPIC_DEFAULT_OPUS_MODEL") or os.environ.get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+
     if not api_key or not base_url or not model:
         return None
     return {"api_key": api_key, "base_url": base_url, "model": model}
