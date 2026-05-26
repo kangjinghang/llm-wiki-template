@@ -60,6 +60,7 @@ def scaffold(root: str, title: str) -> None:
     for script_name in [
         "scaffold.py", "create_page.py", "lint_wiki.py", "audit_review.py",
         "extract_knowledge.py", "merge_frontmatter.py", "ingest_finish.py",
+        "update_index.py", "update_overview.py",
     ]:
         src = script_src / script_name
         if src.exists():

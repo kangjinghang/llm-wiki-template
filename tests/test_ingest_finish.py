@@ -7,7 +7,7 @@ from datetime import date
 # Add scripts/ to path so we can import functions
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from ingest_finish import format_log_entry
+from ingest_finish import format_log_entry, detect_changes
 
 
 class TestFormatLogEntry:
@@ -121,3 +121,51 @@ class TestLogFileIO:
         # entry1 ends with \n\n, entry2 starts with ## — so there's a blank line between
         assert "## Ingest: 第一篇" in combined
         assert "## Ingest: 第二篇" in combined
+
+
+class TestDetectChanges:
+    """Test auto-detection of created/updated files from git diff."""
+
+    def test_detects_new_and_modified(self, tmp_path):
+        """Parse git diff --name-status output correctly."""
+        import subprocess
+        # Init a git repo with a commit
+        subprocess.run(["git", "init"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), capture_output=True, check=True)
+        (tmp_path / "wiki").mkdir()
+        (tmp_path / "wiki" / "existing.md").write_text("old", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True, check=True)
+
+        # Create changes: new file + modified file + ignored file
+        (tmp_path / "wiki" / "new_page.md").write_text("new", encoding="utf-8")
+        (tmp_path / "wiki" / "existing.md").write_text("changed", encoding="utf-8")
+        (tmp_path / "other.txt").write_text("ignored", encoding="utf-8")
+
+        created, updated = detect_changes(tmp_path)
+        assert "wiki/new_page.md" in created
+        assert "wiki/existing.md" in updated
+        assert "other.txt" not in created
+        assert "other.txt" not in updated
+
+    def test_empty_when_no_changes(self, tmp_path):
+        """Return empty strings when no git changes."""
+        import subprocess
+        subprocess.run(["git", "init"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), capture_output=True, check=True)
+        (tmp_path / "wiki").mkdir()
+        (tmp_path / "wiki" / "a.md").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True, check=True)
+
+        created, updated = detect_changes(tmp_path)
+        assert created == ""
+        assert updated == ""
+
+    def test_non_git_dir_returns_empty(self, tmp_path):
+        """Gracefully handle non-git directory."""
+        created, updated = detect_changes(tmp_path)
+        assert created == ""
+        assert updated == ""

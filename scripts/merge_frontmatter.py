@@ -6,12 +6,16 @@ Replaces multiple LLM Edit calls for adding sources/tags/related, related pages 
 and timeline entries with a single Bash call.
 
 Usage:
-    python3 merge_frontmatter.py <page-path> \
-      --sources "[[新来源1]],[[新来源2]]" \
-      --tags "新标签" \
-      --related "[[关联页面]]" \
-      --related-pages "[[Foo]] — desc1||[[Bar]] — desc2" \
-      --timeline "2021.06：《Title》（Authors）——desc"
+    # Single file:
+    python3 merge_frontmatter.py <page-path> \\
+      --sources "[[新来源1]],[[新来源2]]" \\
+      --tags "新标签" \\
+      --related "[[关联页面]]"
+
+    # Multiple files (batch mode — same updates applied to all):
+    python3 merge_frontmatter.py <path1> <path2> <path3> \\
+      --sources "[[新来源]]" \\
+      --related-pages "[[Foo]] — desc"
 
 Exit codes:
     0 — success
@@ -336,24 +340,11 @@ def serialize_frontmatter(raw_fm: str, body: str) -> str:
     return "---" + raw_fm + "---" + body
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Merge array fields into wiki page frontmatter."
-    )
-    parser.add_argument("page_path", help="Path to the wiki page file")
-    parser.add_argument("--sources", default=None, help="Comma-separated source names to append")
-    parser.add_argument("--tags", default=None, help="Comma-separated tags to append")
-    parser.add_argument("--related", default=None, help="Comma-separated related page slugs to append")
-    parser.add_argument("--related-pages", default=None,
-                        help="||-separated Related Pages section entries, e.g. '[[Foo]] — desc1||[[Bar]] — desc2'")
-    parser.add_argument("--timeline", default=None,
-                        help="||-separated timeline entries, e.g. '2021.06：《Title》（Authors）——desc'")
-    args = parser.parse_args()
-
-    page_path = Path(args.page_path).resolve()
+def _process_single(page_path: Path, args: argparse.Namespace) -> bool:
+    """Process a single page file. Returns True if changed."""
     if not page_path.exists():
         print(f"ERROR: File not found: {page_path}", file=sys.stderr)
-        return 1
+        return False
 
     content = page_path.read_text(encoding="utf-8")
 
@@ -361,18 +352,19 @@ def main() -> int:
     for attr in ["sources", "tags", "related", "related_pages", "timeline"]:
         val = getattr(args, attr)
         if val and "[[[" in val:
-            print(f"WARNING: Auto-fixing [[[ → [[ in --{attr}", file=sys.stderr)
+            if not _batch_warned:
+                print(f"WARNING: Auto-fixing [[[ → [[ in --{attr}", file=sys.stderr)
             setattr(args, attr, val.replace("[[[", "[[").replace("]]]", "]]"))
 
     fm, body, raw_fm = parse_frontmatter(content)
 
     if fm is None:
         print(f"ERROR: No frontmatter found in {page_path}", file=sys.stderr)
-        return 1
+        return False
 
     # Auto-fix [[[ wikilink syntax in existing frontmatter
     if "[[[" in raw_fm:
-        print("WARNING: Auto-fixing [[[ → [[ in existing frontmatter", file=sys.stderr)
+        print(f"WARNING: Auto-fixing [[[ → [[ in {page_path.name}", file=sys.stderr)
         raw_fm = raw_fm.replace("[[[", "[[").replace("]]]", "]]")
 
     changed = False
@@ -413,11 +405,11 @@ def main() -> int:
 
     if not changed:
         print(f"No changes needed: {page_path}")
-        return 0
+        return False
 
     # Auto-fix any remaining [[[ in result (shouldn't happen, but safety net)
     if "[[[" in raw_fm:
-        print("WARNING: Auto-fixing [[[ → [[ in merged frontmatter", file=sys.stderr)
+        print(f"WARNING: Auto-fixing [[[ → [[ in merged frontmatter of {page_path.name}", file=sys.stderr)
         raw_fm = raw_fm.replace("[[[", "[[").replace("]]]", "]]")
 
     # Update the `updated` date
@@ -428,6 +420,41 @@ def main() -> int:
     result = serialize_frontmatter(raw_fm, body)
     page_path.write_text(result, encoding="utf-8")
     print(f"Updated: {page_path}")
+    return True
+
+
+_batch_warned = False
+
+
+def main() -> int:
+    global _batch_warned
+    parser = argparse.ArgumentParser(
+        description="Merge array fields into wiki page frontmatter."
+    )
+    parser.add_argument("page_paths", nargs="+", help="Path(s) to wiki page file(s)")
+    parser.add_argument("--sources", default=None, help="Comma-separated source names to append")
+    parser.add_argument("--tags", default=None, help="Comma-separated tags to append")
+    parser.add_argument("--related", default=None, help="Comma-separated related page slugs to append")
+    parser.add_argument("--related-pages", default=None,
+                        help="||-separated Related Pages section entries, e.g. '[[Foo]] — desc1||[[Bar]] — desc2'")
+    parser.add_argument("--timeline", default=None,
+                        help="||-separated timeline entries, e.g. '2021.06：《Title》（Authors）——desc'")
+    args = parser.parse_args()
+
+    # Auto-fix [[[ in input args once for batch
+    for attr in ["sources", "tags", "related", "related_pages", "timeline"]:
+        val = getattr(args, attr)
+        if val and "[[[" in val:
+            print(f"WARNING: Auto-fixing [[[ → [[ in --{attr}", file=sys.stderr)
+            setattr(args, attr, val.replace("[[[", "[[").replace("]]]", "]]"))
+            _batch_warned = True
+
+    any_changed = False
+    for raw_path in args.page_paths:
+        page_path = Path(raw_path).resolve()
+        if _process_single(page_path, args):
+            any_changed = True
+
     return 0
 
 

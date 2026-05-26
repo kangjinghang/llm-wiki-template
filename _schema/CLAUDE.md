@@ -47,34 +47,48 @@ When a new source is added to `raw/`:
      ```
    - For each entity with `existing_page` set: cascade-update (see step 3)
 3. Cascade-update all existing concept/entity/synthesis pages that are relevant:
-   - **Frontmatter updates** (sources, tags, related) — use `merge_frontmatter.py`:
+   - **Use `merge_frontmatter.py` for all updates** — it handles frontmatter (sources, tags, related) and body (related pages, timeline) in one call per page:
      ```
+     # Single page with all fields:
      python scripts/merge_frontmatter.py wiki/entities/<name>.md \
        --sources "[[source1]],[[source2]]" \
        --tags "tag1" \
-       --related "[[related-page]]"
-     ```
-     One Bash call per page handles all frontmatter array merging with deduplication.
-     Do NOT use Edit to append items to frontmatter arrays — use the script instead.
-   - **Body updates** (related pages section, timeline entries) — also use `merge_frontmatter.py` with `--related-pages` and `--timeline` flags:
-     ```
-     python scripts/merge_frontmatter.py wiki/entities/<name>.md \
+       --related "[[related-page]]" \
        --related-pages "[[Foo]] — desc1||[[Bar]] — desc2" \
        --timeline "2021.06：《Title》（Authors）——desc"
      ```
-     Entries are `||`-separated. The script handles dedup and section creation. Combine with frontmatter flags in a single call to avoid `file_modified_since_read` errors.
-4. Update `wiki/index.md` — add new pages under the correct section
-5. Append to `wiki/overview.md` — add a new `###` section **before** the `## 开放问题` line. **NEVER Read, Grep, or otherwise inspect overview.md.** Use a single Edit call with `old_string="\n## 开放问题"` and `new_string="\n### <heading>\n<content>\n\n## 开放问题"`. Each section should cover the newly ingested concepts with `[[wikilink]]` references. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
+     Entries for `--related-pages` and `--timeline` are `||`-separated. The script handles dedup and section creation.
+   - **Batch mode** — apply the same updates to multiple pages in a single call:
+     ```
+     python scripts/merge_frontmatter.py \
+       wiki/entities/<name1>.md wiki/entities/<name2>.md wiki/entities/<name3>.md \
+       --sources "[[source-page]]" \
+       --tags "tag1" \
+       --related-pages "[[NewConcept]] — description"
+     ```
+     The same sources/tags/related are merged into each file independently (with per-file dedup).
+     Do NOT use Edit to append items to frontmatter arrays — use the script instead.
+4. Update `wiki/index.md` — use `update_index.py`:
+   ```
+   python scripts/update_index.py . \
+     --source "[[source-page]] — description" \
+     --concept "[[concept-page]] — description" \
+     --entity "[[entity-page]] — description"
+   ```
+   Each flag can be repeated. Entries are deduplicated by wikilink target.
+5. Update `wiki/overview.md` — use `update_overview.py`:
+   ```
+   python scripts/update_overview.py . --content "### <heading>\n\n<paragraph text with [[wikilinks]]>"
+   ```
+   The script inserts the section before `## 开放问题` automatically. Do NOT Read or Edit overview.md directly — the script handles it. Each section should cover the newly ingested concepts with `[[wikilink]]` references. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
 6. Run `ingest_finish.py` to write log and commit — this replaces manual log writing and git commands:
    ```
    python scripts/ingest_finish.py . \
      --title "<title>" \
      --source "raw/<path>" \
-     --created "wiki/sources/a.md,wiki/concepts/b.md" \
-     --updated "wiki/entities/c.md" \
      --notes "key concepts summary"
    ```
-   The script automatically appends to `log/{date}.md` and runs `git add + commit`.
+   The script auto-detects created/updated files from `git status` — no need to specify `--created` or `--updated` manually. It automatically appends to `log/{date}.md` and runs `git add + commit`.
    Do NOT manually write log entries or run git add/commit after this step.
 7. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
 

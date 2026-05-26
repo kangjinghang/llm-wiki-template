@@ -279,3 +279,59 @@ class TestCombinedUpdate:
         assert "[[Foo]] — desc" in result
         # Should be before Sources
         assert result.index("Related Pages") < result.index("## Sources")
+
+
+class TestBatchMode:
+    """Test multi-file batch mode: same updates applied to multiple files."""
+
+    def _make_page(self, tmp_path: Path, name: str, sources: str = "") -> Path:
+        page = tmp_path / name
+        page.write_text(
+            f'---\ntitle: "{name}"\nsources:\n  - "{sources}"\n---\n\n## Summary\n\nText.\n',
+            encoding="utf-8",
+        )
+        return page
+
+    def test_batch_sources(self, tmp_path):
+        """--sources applied to multiple files in one call."""
+        p1 = self._make_page(tmp_path, "a.md", "[[old]]")
+        p2 = self._make_page(tmp_path, "b.md", "[[old]]")
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "merge_frontmatter.py"),
+             str(p1), str(p2), "--sources", "[[new]]"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        assert '[[new]]' in p1.read_text(encoding="utf-8")
+        assert '[[new]]' in p2.read_text(encoding="utf-8")
+
+    def test_batch_dedup_per_file(self, tmp_path):
+        """Dedup works independently per file in batch."""
+        p1 = self._make_page(tmp_path, "a.md", "[[existing]]")
+        p2 = self._make_page(tmp_path, "b.md", "[[old]]")
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "merge_frontmatter.py"),
+             str(p1), str(p2), "--sources", "[[existing]]"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        # p1 should show "No changes needed" since [[existing]] already there
+        assert "No changes needed" in proc.stderr or "No changes needed" in proc.stdout
+
+    def test_batch_related_pages(self, tmp_path):
+        """--related-pages applied to multiple files."""
+        p1 = tmp_path / "a.md"
+        p1.write_text('---\ntitle: "A"\n---\n\n## Summary\n\n## Sources / 来源\n', encoding="utf-8")
+        p2 = tmp_path / "b.md"
+        p2.write_text('---\ntitle: "B"\n---\n\n## Summary\n\n## Sources / 来源\n', encoding="utf-8")
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "merge_frontmatter.py"),
+             str(p1), str(p2), "--related-pages", "[[Foo]] — desc"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0
+        assert "[[Foo]]" in p1.read_text(encoding="utf-8")
+        assert "[[Foo]]" in p2.read_text(encoding="utf-8")
