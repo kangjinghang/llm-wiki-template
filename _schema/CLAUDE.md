@@ -16,7 +16,7 @@ The wiki is the product. Chat is just the interface.
 
 - **Raw is immutable.** Never modify files in `raw/`. They are the source of truth for error correction.
 - **Origin matters.** Pages with `origin: self-written` must never be overwritten by the LLM. Read them, reference them, but do not edit them.
-- **Session startup.** At the start of every session, read this file (`CLAUDE.md`), then `wiki/index.md`. This orients you to the wiki's current state without scanning every page.
+- **Session startup.** At the start of every session, read this file (`CLAUDE.md`), then `wiki/index-summary.md`. This orients you to the wiki's current state without scanning every page.
 - **Commit after every ingest.** Use git to version every change. This enables rollback if an ingest goes wrong.
 
 ## Operations
@@ -32,56 +32,22 @@ When a new source is added to `raw/`:
    python scripts/extract_knowledge.py . --next
    ```
    This auto-finds the first unprocessed article (no source page) and calls the LLM API independently.
-   Output: `wiki/meta/extract-<slug>.json`
+   Output: `wiki/meta/extract-<slug>.json` — includes `page_content` for each concept/entity and `source_content` for the source page.
    Do NOT manually search for unprocessed articles (grep, ls, comm) — `--next` handles everything.
+   **Do NOT ask the user which article to process.** Just run `--next` and process whichever article it returns. No `AskUserQuestion`, no listing, no choosing.
    If exit code ≠ 0 (all articles processed or API error), report to user and stop, or fall back to reading the source file directly.
-2. Read the extraction JSON (`wiki/meta/extract-<slug>.json`). Based on the JSON:
-   - Create a source summary page:
-     ```
-     python scripts/create_page.py . source "<title>" --raw-path "raw/<path>" --compute-hash --summary "summary text" --content "body content"
-     ```
-     Use `--summary` and `--content` to fill the page in one call. Do NOT read the original raw article — the JSON has all the information needed.
-   - For each concept/entity with `is_new=true` or `existing_page=null`: create a new page
-     ```
-     python scripts/create_page.py . <type> "<name>" --summary "summary" --content "body"
-     ```
-   - For each entity with `existing_page` set: cascade-update (see step 3)
-3. Cascade-update all existing concept/entity/synthesis pages that are relevant:
-   - **Use `merge_frontmatter.py` for all updates** — it handles frontmatter (sources, tags, related) and body (related pages, timeline) in one call per page:
-     ```
-     # Single page with all fields:
-     python scripts/merge_frontmatter.py wiki/entities/<name>.md \
-       --sources "[[source1]],[[source2]]" \
-       --tags "tag1" \
-       --related "[[related-page]]" \
-       --related-pages "[[Foo]] — desc1||[[Bar]] — desc2" \
-       --timeline "2021.06：《Title》（Authors）——desc"
-     ```
-     Entries for `--related-pages` and `--timeline` are `||`-separated. The script handles dedup and section creation.
-   - **Batch mode** — apply the same updates to multiple pages in a single call:
-     ```
-     python scripts/merge_frontmatter.py \
-       wiki/entities/<name1>.md wiki/entities/<name2>.md wiki/entities/<name3>.md \
-       --sources "[[source-page]]" \
-       --tags "tag1" \
-       --related-pages "[[NewConcept]] — description"
-     ```
-     The same sources/tags/related are merged into each file independently (with per-file dedup).
-     Do NOT use Edit to append items to frontmatter arrays — use the script instead.
-4. Update `wiki/index.md` — use `update_index.py`:
+2. Create all pages and cascade-update existing pages in one call:
    ```
-   python scripts/update_index.py . \
-     --source "[[source-page]] — description" \
-     --concept "[[concept-page]] — description" \
-     --entity "[[entity-page]] — description"
+   python scripts/create_pages_from_extract.py . wiki/meta/extract-<slug>.json
    ```
-   Each flag can be repeated. Entries are deduplicated by wikilink target.
-5. Update `wiki/overview.md` — use `update_overview.py`:
+   This single script handles: source page creation, new concept/entity page creation, cascade-updating existing pages (sources, tags), and updating index.md + index-summary.md.
+   Do NOT call create_page.py, merge_frontmatter.py, or update_index.py separately — the combined script does all of that.
+3. Update `wiki/overview.md` — use `update_overview.py`:
    ```
    python scripts/update_overview.py . --content "### <heading>\n\n<paragraph text with [[wikilinks]]>"
    ```
    The script inserts the section before `## 开放问题` automatically. Do NOT Read or Edit overview.md directly — the script handles it. Each section should cover the newly ingested concepts with `[[wikilink]]` references. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
-6. Run `ingest_finish.py` to write log and commit — this replaces manual log writing and git commands:
+4. Run `ingest_finish.py` to write log and commit — this replaces manual log writing and git commands:
    ```
    python scripts/ingest_finish.py . \
      --title "<title>" \
@@ -90,7 +56,7 @@ When a new source is added to `raw/`:
    ```
    The script auto-detects created/updated files from `git status` — no need to specify `--created` or `--updated` manually. It automatically appends to `log/{date}.md` and runs `git add + commit`.
    Do NOT manually write log entries or run git add/commit after this step.
-7. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
+5. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 

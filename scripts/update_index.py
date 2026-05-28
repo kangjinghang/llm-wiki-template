@@ -121,6 +121,42 @@ def add_entries(content: str, section_name: str, entries: list[str]) -> str:
     return content
 
 
+def _strip_description(entry: str) -> str:
+    """Strip description from an entry, keeping only [[wikilink]]."""
+    m = re.search(r"\[\[[^\]]+\]\]", entry)
+    return m.group(0) if m else f"[[{entry}]]"
+
+
+def _generate_summary(index_content: str) -> str:
+    """Generate compact index-summary.md content from index.md."""
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in index_content.splitlines():
+        h = re.match(r"^## (.+)$", line)
+        if h:
+            current = h.group(1).strip()
+            if current not in sections:
+                sections[current] = []
+        elif current:
+            for name in re.findall(r"\[\[([^\]]+)\]\]", line):
+                sections[current].append(name)
+
+    # Extract title from first line
+    title_match = re.match(r"^#\s+(.+)$", index_content.splitlines()[0]) if index_content else None
+    title = title_match.group(1).replace("Index", "Index Summary") if title_match else "Index Summary"
+
+    parts = [f"# {title}", ""]
+    for cat in ("Sources", "Concepts", "Entities", "Syntheses"):
+        names = sections.get(cat)
+        if names:
+            parts.append(f"## {cat}")
+            for n in names:
+                parts.append(f"- [[{n}]]")
+            parts.append("")
+
+    return "\n".join(parts)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Append entries to wiki/index.md sections."
@@ -166,6 +202,13 @@ def main() -> int:
 
     index_path.write_text(content, encoding="utf-8")
     print(f"Updated: {index_path}")
+
+    # Regenerate index-summary.md from updated index.md
+    summary_path = wiki_root / "wiki" / "index-summary.md"
+    summary_content = _generate_summary(content)
+    summary_path.write_text(summary_content, encoding="utf-8")
+    print(f"Updated: {summary_path}")
+
     return 0
 
 

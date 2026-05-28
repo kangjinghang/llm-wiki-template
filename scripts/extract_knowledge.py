@@ -71,12 +71,22 @@ def derive_slug(raw_path: str) -> str:
     return name.lower()
 
 
-def load_api_config(settings_path: Path) -> dict | None:
-    """Load API config from ~/.claude/settings.json, falling back to env vars.
+def _first(*values: str | None) -> str | None:
+    """Return the first non-empty value."""
+    return next((v for v in values if v), None)
 
-    Resolution order for each field:
-      1. settings.json → env.ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL / ANTHROPIC_DEFAULT_OPUS_MODEL
-      2. Process environment variables (same names)
+
+def load_api_config(settings_path: Path) -> dict | None:
+    """Load API config from environment variables, falling back to settings.json.
+
+    Resolution order for each field (first non-empty wins):
+      1. Process environment variables (primary + common aliases)
+      2. ~/.claude/settings.json → env section
+
+    Supported env var names:
+      api_key:  ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY
+      base_url: ANTHROPIC_BASE_URL
+      model:    ANTHROPIC_DEFAULT_OPUS_MODEL, ANTHROPIC_MODEL
 
     Returns dict with api_key, base_url, model or None on failure.
     """
@@ -88,13 +98,53 @@ def load_api_config(settings_path: Path) -> dict | None:
         except (json.JSONDecodeError, OSError):
             pass
 
-    api_key = file_env.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
-    base_url = file_env.get("ANTHROPIC_BASE_URL") or os.environ.get("ANTHROPIC_BASE_URL")
-    model = file_env.get("ANTHROPIC_DEFAULT_OPUS_MODEL") or os.environ.get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+    api_key = _first(
+        os.environ.get("ANTHROPIC_AUTH_TOKEN"),
+        os.environ.get("ANTHROPIC_API_KEY"),
+        file_env.get("ANTHROPIC_AUTH_TOKEN"),
+        file_env.get("ANTHROPIC_API_KEY"),
+    )
+    base_url = _first(
+        os.environ.get("ANTHROPIC_BASE_URL"),
+        file_env.get("ANTHROPIC_BASE_URL"),
+    )
+    model = _first(
+        os.environ.get("ANTHROPIC_DEFAULT_OPUS_MODEL"),
+        os.environ.get("ANTHROPIC_MODEL"),
+        file_env.get("ANTHROPIC_DEFAULT_OPUS_MODEL"),
+        file_env.get("ANTHROPIC_MODEL"),
+    )
 
     if not api_key or not base_url or not model:
         return None
     return {"api_key": api_key, "base_url": base_url, "model": model}
+
+
+def extract_page_names(index_text: str) -> str:
+    """Extract existing page names from index.md, grouped by category.
+
+    Returns a compact summary (~5KB) instead of the full index (~107KB).
+    The LLM only needs page names to determine is_new / existing_page.
+    """
+    categories: dict[str, list[str]] = {}
+    current = None
+    for line in index_text.splitlines():
+        header = re.match(r"^##\s+(.+)$", line)
+        if header:
+            current = header.group(1).strip()
+            if current not in categories:
+                categories[current] = []
+        elif current:
+            for name in re.findall(r"\[\[([^\]]+)\]\]", line):
+                categories[current].append(name)
+
+    parts = []
+    for cat in ("Sources", "Concepts", "Entities"):
+        names = categories.get(cat)
+        if names:
+            parts.append(f"## 已有 {cat}\n" + "\n".join(f"- [[{n}]]" for n in names))
+
+    return "\n\n".join(parts) if parts else "(empty wiki)"
 
 
 # Sections to extract from CLAUDE.md (in order)
@@ -163,19 +213,22 @@ Output a single JSON object with this exact structure. Do NOT wrap in markdown c
 {{
   "title": "Article title",
   "summary": "2-3 sentence summary of the article",
+  "source_content": "Structured summary of the article for the source page, using markdown sections like ## 核心内容, ## 关键发现, ## 相关概念 with [[wikilinks]]",
   "concepts": [
     {{
       "name": "Concept name",
-      "description": "One-sentence description with key information from the article",
-      "is_new": true
+      "description": "One-sentence description for index.md",
+      "is_new": true,
+      "page_content": "Full wiki page content in markdown with sections like ## 定义, ## 方法/机制, ## 相关概念 (with [[wikilinks]]), ## 来源 (with [[wikilinks]] to source page). 200-500 words."
     }}
   ],
   "entities": [
     {{
       "name": "Entity name",
       "type": "entity_type (e.g. person, organization, tool, dataset)",
-      "description": "One-sentence description",
-      "existing_page": "wiki/entities/xxx.md or null if new"
+      "description": "One-sentence description for index.md",
+      "existing_page": "wiki/entities/xxx.md or null if new",
+      "page_content": "Full wiki page content in markdown. For organizations: ## 简介, ## 研究领域. For people: ## 简介, ## 代表作. Include ## 来源 with [[wikilink]] to source page."
     }}
   ],
   "tags": ["tag1", "tag2"],
@@ -190,7 +243,9 @@ Rules:
 - Use the Tag Taxonomy for tags — only use tags listed there
 - Check the Wiki Index to determine if a page already exists (set existing_page or is_new accordingly)
 - Follow the Writing Style conventions for language
-- The "description" fields should be informative enough that a reader can decide whether to consult the original article"""
+- The "description" fields should be informative enough that a reader can decide whether to consult the original article
+- The "page_content" fields should be complete wiki pages with structured sections, [[wikilinks]] to related concepts/entities, and a ## 来源 section linking back to the source article
+- The "source_content" should summarize the article's key contributions and link to the concepts/entities mentioned"""
 
 
 def parse_llm_response(text: str) -> dict | None:
@@ -226,6 +281,10 @@ def parse_llm_response(text: str) -> dict | None:
     data.setdefault("tags", [])
     data.setdefault("key_findings", [])
     data.setdefault("relations", [])
+    data.setdefault("source_content", "")
+
+    for item in data.get("concepts", []) + data.get("entities", []):
+        item.setdefault("page_content", "")
 
     return data
 
@@ -261,8 +320,11 @@ def main() -> int:
     settings_path = Path.home() / ".claude" / "settings.json"
     config = load_api_config(settings_path)
     if config is None:
-        print(f"ERROR: Could not load API config from {settings_path}", file=sys.stderr)
-        print("Ensure settings.json has env.ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL, ANTHROPIC_DEFAULT_OPUS_MODEL", file=sys.stderr)
+        print("ERROR: Could not load API config from any source.", file=sys.stderr)
+        print("Configure one of:", file=sys.stderr)
+        print("  (1) Environment variables: ANTHROPIC_AUTH_TOKEN (or ANTHROPIC_API_KEY),", file=sys.stderr)
+        print("      ANTHROPIC_BASE_URL, ANTHROPIC_DEFAULT_OPUS_MODEL (or ANTHROPIC_MODEL)", file=sys.stderr)
+        print(f"  (2) {settings_path} → env section with the same keys", file=sys.stderr)
         return 1
 
     # Read inputs
@@ -272,7 +334,8 @@ def main() -> int:
     claude_md_rules = extract_claude_md_sections(claude_md)
 
     index_path = wiki_root / "wiki" / "index.md"
-    wiki_index = index_path.read_text(encoding="utf-8") if index_path.exists() else "(no index.md found)"
+    wiki_index_full = index_path.read_text(encoding="utf-8") if index_path.exists() else ""
+    wiki_index = extract_page_names(wiki_index_full) if wiki_index_full else "(no index.md found)"
 
     # Build prompt
     system_prompt = "你是一个知识架构师。阅读以下文章，根据 wiki 规则提取结构化信息。输出纯 JSON，不要 markdown 代码块包裹。"
@@ -284,7 +347,7 @@ def main() -> int:
     api_url = config["base_url"].rstrip("/") + "/v1/messages"
     request_body = json.dumps({
         "model": config["model"],
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "temperature": 0.1,
         "system": system_prompt,
         "messages": [{"role": "user", "content": user_message}],
