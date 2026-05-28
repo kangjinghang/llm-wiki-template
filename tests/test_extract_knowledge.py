@@ -31,8 +31,13 @@ class TestDeriveSlug:
 
 
 class TestLoadApiConfig:
-    def test_reads_settings(self):
-        """Load config from a valid settings.json."""
+    def test_reads_settings(self, monkeypatch):
+        """Load config from a valid settings.json when no env vars set."""
+        monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_DEFAULT_OPUS_MODEL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             settings = {
@@ -99,8 +104,8 @@ class TestLoadApiConfig:
         assert config["base_url"] == "https://env.api.test.com"
         assert config["model"] == "file-model"  # from settings.json, not env
 
-    def test_settings_take_priority_over_env(self, tmp_path, monkeypatch):
-        """settings.json values take priority over env vars."""
+    def test_env_vars_take_priority_over_settings(self, tmp_path, monkeypatch):
+        """Env var values take priority over settings.json."""
         settings = {
             "env": {
                 "ANTHROPIC_AUTH_TOKEN": "file-key",
@@ -114,9 +119,9 @@ class TestLoadApiConfig:
         monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.api.test.com")
         monkeypatch.setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "env-model")
         config = load_api_config(settings_path)
-        assert config["api_key"] == "file-key"
-        assert config["base_url"] == "https://file.api.test.com"
-        assert config["model"] == "file-model"
+        assert config["api_key"] == "env-key"
+        assert config["base_url"] == "https://env.api.test.com"
+        assert config["model"] == "env-model"
 
     def test_partial_env_vars_still_none(self, tmp_path, monkeypatch):
         """Return None when neither settings nor env has all required fields."""
