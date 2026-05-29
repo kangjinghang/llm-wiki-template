@@ -18,12 +18,15 @@ Exit codes:
 
 import hashlib
 import json
+import os
 import re
 import sys
+import urllib.request
 from datetime import date
 from pathlib import Path
 
 from create_page import slugify, load_template, fill_template, fill_fm_field, type_to_dir
+from extract_knowledge import load_api_config
 from merge_frontmatter import (
     parse_frontmatter, merge_array_field,
     merge_related_pages_section, merge_timeline_entries,
@@ -92,6 +95,106 @@ def _create_page(
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path.write_text(filled, encoding="utf-8")
     return out_path
+
+
+def _call_merge_api(
+    config: dict,
+    existing_body: str,
+    new_content: str,
+    source_title: str,
+) -> str | None:
+    """Call the LLM API to generate incremental content for an existing page.
+
+    Returns incremental text to append, or None if nothing new to add.
+    """
+    system_prompt = (
+        "你是一个知识编辑。已有页面写了一些内容，新文章提供了补充信息。"
+        "只输出需要追加到已有页面的新内容。如果新信息已在已有页面中存在，不要重复。"
+        "输出格式：要追加的 markdown 文本。如果没有新信息需要追加，只输出 \"无\"。"
+    )
+    user_message = (
+        f"## 已有页面内容\n{existing_body[:3000]}\n\n"
+        f"## 新文章补充\n{new_content[:2000]}\n\n"
+        f"## 来源\n{source_title}"
+    )
+
+    api_url = config["base_url"].rstrip("/") + "/v1/messages"
+    request_body = json.dumps({
+        "model": config["model"],
+        "max_tokens": 1024,
+        "temperature": 0.1,
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_message}],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        api_url,
+        data=request_body,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": config["api_key"],
+            "anthropic-version": "2023-06-01",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            resp_data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"  WARNING: merge API call failed: {e}", file=sys.stderr)
+        return None
+
+    response_text = ""
+    for block in resp_data.get("content", []):
+        if block.get("type") == "text":
+            response_text += block.get("text", "")
+
+    text = response_text.strip()
+    if not text or text == "无" or text == "无新信息":
+        return None
+    return text
+
+
+def _merge_page_content(
+    page_path: Path,
+    incremental_text: str,
+    source_title: str,
+) -> bool:
+    """Append incremental content to an existing page before ## 来源 / Sources."""
+    text = page_path.read_text(encoding="utf-8")
+
+    # Only modify the body part (after frontmatter)
+    fm, body, raw_fm = parse_frontmatter(text)
+    if fm is None:
+        return False
+
+    slug = slugify(source_title)
+    subsection_header = f"### 来自 [[{slug}]]"
+
+    # Skip if this subsection already exists (dedup)
+    if subsection_header in body:
+        print(f"  SKIP (subsection exists): {subsection_header}", file=sys.stderr)
+        return False
+
+    new_section = f"\n## 补充发现 / Additional Findings\n\n{subsection_header}\n\n{incremental_text}\n"
+
+    # Insert before ## 来源 / Sources or ## Sources
+    insert_markers = ["## 来源 / Sources", "## Sources", "## 来源"]
+    inserted = False
+    for marker in insert_markers:
+        idx = body.find(marker)
+        if idx != -1:
+            body = body[:idx] + new_section + body[idx:]
+            inserted = True
+            break
+
+    if not inserted:
+        # Append at end
+        body = body.rstrip("\n") + new_section
+
+    result = "---" + raw_fm + "---" + body
+    page_path.write_text(result, encoding="utf-8")
+    return True
 
 
 def _cascade_update(
@@ -242,11 +345,16 @@ def main() -> int:
     if title:
         timeline.append(f"{date.today().strftime('%Y.%m')}：《{title}》")
 
-    # 5. Cascade-update existing concept pages
+    # Load API config for content merge
+    settings_path = Path.home() / ".claude" / "settings.json"
+    api_config = load_api_config(settings_path)
+
+    # 5. Cascade-update existing concept pages (with content merge)
     for concept in concepts:
         if concept.get("is_new", True):
             continue
         name = concept.get("name", "")
+        page_content = concept.get("page_content", "")
         page_path = _find_existing_page(wiki_root, "concept", name)
         if page_path:
             changed = _cascade_update(
@@ -257,6 +365,13 @@ def main() -> int:
             if changed:
                 updated_pages.append(str(page_path))
                 print(f"  Updated: {page_path}")
+            # Content merge: generate incremental content via API
+            if api_config and page_content and title:
+                incremental = _call_merge_api(api_config, page_path.read_text(encoding="utf-8"), page_content, title)
+                if incremental:
+                    merged = _merge_page_content(page_path, incremental, title)
+                    if merged:
+                        print(f"  Merged content: {page_path}")
 
     # 6. Cascade-update existing entity pages
     for entity in entities:
