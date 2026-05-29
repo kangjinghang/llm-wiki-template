@@ -49,7 +49,8 @@ def resolve_article_path(wiki_root: Path, *, use_next: bool = False, raw_article
             text = source_file.read_text(encoding="utf-8")
             m = re.search(r"^raw_path:\s*(.+)$", text, re.MULTILINE)
             if m:
-                processed.add(m.group(1).strip().strip('"').strip("'"))
+                # Normalize to forward slashes for cross-platform comparison
+                processed.add(m.group(1).strip().strip('"').strip("'").replace("\\", "/"))
 
     # Find first unprocessed article
     for article in sorted(raw_dir.glob("*.md")):

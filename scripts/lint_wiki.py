@@ -307,6 +307,7 @@ def lint(root: str) -> int:
             and p != overview_path
             and p != summary_path
             and f"[[{p.stem}]]" not in index_text
+            and f"[[{p.stem}|" not in index_text
             and str(p.relative_to(wiki_path).with_suffix("")) not in index_text
         ]
         if not_in_index:

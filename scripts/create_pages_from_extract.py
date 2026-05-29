@@ -232,9 +232,9 @@ def main() -> int:
         existing = entity.get("existing_page", "")
         if not existing:
             continue
+        # Normalize backslashes for Windows compatibility
+        existing = existing.replace("\\", "/")
         page_path = wiki_root / existing
-        if not page_path.is_absolute():
-            page_path = wiki_root / existing
         changed = _cascade_update(page_path, source_wikilink, tags)
         if changed:
             updated_pages.append(str(page_path))
