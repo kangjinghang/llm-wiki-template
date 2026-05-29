@@ -34,8 +34,17 @@ from merge_frontmatter import (
 
 
 def _auto_fix_wikilinks(text: str) -> str:
-    """Fix [[[ → [[ triple bracket typos from LLM output."""
-    return text.replace("[[[", "[[").replace("]]]", "]]")
+    """Fix common wikilink typos from LLM output.
+
+    Handles: [[[ → [[, [[[" → [[, [[" → [[, ]] → ]], etc.
+    """
+    # Fix over-quoted wikilinks: [[["name"]] → [[name]]
+    text = re.sub(r'\[\[\["([^"]+)"\]\]', r'[[\1]]', text)
+    text = re.sub(r'\[\[\[([^\]]+?)\]\]\]', r'[[\1]]', text)
+    text = re.sub(r'\[\["([^"]+)"\]\]', r'[[\1]]', text)
+    # Fix plain triple brackets
+    text = text.replace("[[[", "[[").replace("]]]", "]]")
+    return text
 
 
 def _create_page(
