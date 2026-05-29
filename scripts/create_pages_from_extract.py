@@ -24,7 +24,10 @@ from datetime import date
 from pathlib import Path
 
 from create_page import slugify, load_template, fill_template, fill_fm_field, type_to_dir
-from merge_frontmatter import parse_frontmatter, merge_array_field
+from merge_frontmatter import (
+    parse_frontmatter, merge_array_field,
+    merge_related_pages_section, merge_timeline_entries,
+)
 
 
 def _auto_fix_wikilinks(text: str) -> str:
@@ -91,8 +94,14 @@ def _create_page(
     return out_path
 
 
-def _cascade_update(page_path: Path, source_wikilink: str, tags: list[str]) -> bool:
-    """Update an existing page with new source and tags."""
+def _cascade_update(
+    page_path: Path,
+    source_wikilink: str,
+    tags: list[str],
+    related_pages: list[str] | None = None,
+    timeline_entries: list[str] | None = None,
+) -> bool:
+    """Update an existing page with new source, tags, related pages, and timeline."""
     if not page_path.exists():
         print(f"  SKIP (not found): {page_path}", file=sys.stderr)
         return False
@@ -112,6 +121,14 @@ def _cascade_update(page_path: Path, source_wikilink: str, tags: list[str]) -> b
     # Update date
     today = date.today().isoformat()
     raw_fm = re.sub(r"(^updated:\s*).*?$", rf"\g<1>{today}", raw_fm, count=1, flags=re.MULTILINE)
+
+    # Merge related pages into body
+    if related_pages:
+        body, _ = merge_related_pages_section(body, related_pages)
+
+    # Merge timeline entries into body
+    if timeline_entries:
+        body, _ = merge_timeline_entries(body, timeline_entries)
 
     result = "---" + raw_fm + "---" + body
     page_path.write_text(result, encoding="utf-8")
@@ -215,6 +232,16 @@ def main() -> int:
             created_pages.append(f"entity: {result.name}")
             print(f"  Created entity: {result}")
 
+    # Build related_pages and timeline from concepts for cascade updates
+    new_concept_pages = [
+        f"[[{c['name']}]] — {c.get('description', '')}"
+        for c in concepts if c.get("is_new", True) and c.get("name")
+    ]
+    # Build timeline entry from source info
+    timeline = []
+    if title:
+        timeline.append(f"{date.today().strftime('%Y.%m')}：《{title}》")
+
     # 5. Cascade-update existing concept pages
     for concept in concepts:
         if concept.get("is_new", True):
@@ -222,7 +249,11 @@ def main() -> int:
         name = concept.get("name", "")
         page_path = _find_existing_page(wiki_root, "concept", name)
         if page_path:
-            changed = _cascade_update(page_path, source_wikilink, tags)
+            changed = _cascade_update(
+                page_path, source_wikilink, tags,
+                related_pages=new_concept_pages,
+                timeline_entries=timeline,
+            )
             if changed:
                 updated_pages.append(str(page_path))
                 print(f"  Updated: {page_path}")
@@ -235,7 +266,11 @@ def main() -> int:
         # Normalize backslashes for Windows compatibility
         existing = existing.replace("\\", "/")
         page_path = wiki_root / existing
-        changed = _cascade_update(page_path, source_wikilink, tags)
+        changed = _cascade_update(
+            page_path, source_wikilink, tags,
+            related_pages=new_concept_pages,
+            timeline_entries=timeline,
+        )
         if changed:
             updated_pages.append(str(page_path))
             print(f"  Updated: {page_path}")
