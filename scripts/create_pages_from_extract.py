@@ -247,6 +247,131 @@ def _cascade_update(
     return True
 
 
+def normalize_wikilinks(text: str, existing_pages: set[str]) -> str:
+    """Normalize wikilinks to match actual page filenames (slug case).
+
+    Converts [[Bollinger带]] → [[bollinger带]] when the file is bollinger带.md.
+    Preserves alias syntax: [[Slug|Display]] → [[slug|Display]].
+    Leaves links to non-existent pages unchanged.
+    """
+    # Build lookup: lowercase slug → actual stem
+    slug_to_stem = {stem.lower(): stem for stem in existing_pages}
+
+    def _normalize(m):
+        inner = m.group(1)
+        if "|" in inner:
+            slug, display = inner.split("|", 1)
+        else:
+            slug = inner
+            display = None
+
+        slug_stripped = slug.strip()
+        # Use slugify for consistent comparison
+        slugified = slugify(slug_stripped)
+
+        # Find the actual stem that matches
+        if slugified in slug_to_stem and slug_stripped != slug_to_stem[slugified]:
+            actual = slug_to_stem[slugified]
+            if display:
+                return f"[[{actual}|{display}]]"
+            return f"[[{actual}]]"
+        return m.group(0)
+
+    result = re.sub(r'\[\[([^\]]+)\]\]', _normalize, text)
+    return result
+
+
+def fix_dead_wikilinks(wiki_dir: str, page_paths: list[str]) -> int:
+    """Remove brackets from wikilinks pointing to non-existent pages.
+
+    Args:
+        wiki_dir: Path to the wiki/ directory.
+        page_paths: List of page file paths to scan.
+
+    Returns:
+        Number of dead wikilinks fixed.
+    """
+    wiki_path = Path(wiki_dir)
+    existing_pages = {p.stem for p in wiki_path.rglob("*.md")}
+
+    fixed_count = 0
+    for page_str in page_paths:
+        page_path = Path(page_str)
+        if not page_path.exists():
+            continue
+        text = page_path.read_text(encoding="utf-8")
+
+        # First normalize case
+        text_norm = normalize_wikilinks(text, existing_pages)
+
+        # Then strip dead links
+        def _replace_dead(m):
+            nonlocal fixed_count
+            target = m.group(1)
+            slug = target.split("|")[0].strip() if "|" in target else target.strip()
+            if slug in existing_pages or slug.lower() in existing_pages:
+                return m.group(0)
+            fixed_count += 1
+            return target
+
+        new_text = re.sub(r'\[\[([^\]]+)\]\]', _replace_dead, text_norm)
+        if new_text != text:
+            page_path.write_text(new_text, encoding="utf-8")
+            print(f"  Fixed dead wikilinks: {page_path.name}")
+    if fixed_count:
+        print(f"  Fixed {fixed_count} dead wikilinks across {len(page_paths)} pages")
+    return fixed_count
+
+
+def fill_missing_raw_path(source_page: Path, raw_path: str | None, wiki_root: Path) -> bool:
+    """Fill empty raw_path on an existing source page and add raw_hash.
+
+    Returns True if the page was updated, False otherwise.
+    """
+    if not raw_path or not source_page.exists():
+        return False
+
+    text = source_page.read_text(encoding="utf-8")
+    if not re.search(r'^raw_path:\s*""?\s*$', text, re.MULTILINE):
+        return False
+
+    text = re.sub(r'^raw_path:\s*".*"$', f'raw_path: "{raw_path}"', text, count=1, flags=re.MULTILINE)
+    if "raw_hash:" not in text:
+        raw_full = wiki_root / raw_path
+        if raw_full.exists():
+            raw_hash = hashlib.sha256(raw_full.read_bytes()).hexdigest()
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                text = "---" + parts[1].rstrip() + f'\nraw_hash: "{raw_hash}"\n---' + parts[2]
+
+    source_page.write_text(text, encoding="utf-8")
+    print(f"  Fixed raw_path: {source_page.name}")
+    return True
+
+
+def find_raw_path_for_extract(wiki_root: Path, extract_path: str | Path) -> str | None:
+    """Find the raw article path corresponding to an extract JSON file.
+
+    The extract filename is extract-{derive_slug}.json where derive_slug
+    strips [timestamp] prefix from the raw article filename.
+    """
+    extract_stem = Path(extract_path).stem
+    if not extract_stem.startswith("extract-"):
+        return None
+
+    slug = extract_stem[8:]  # Remove "extract-" prefix
+    raw_dir = wiki_root / "raw" / "articles"
+    if not raw_dir.exists():
+        return None
+
+    for article in sorted(raw_dir.glob("*.md")):
+        article_slug = re.sub(r"^\[\d+\]", "", article.stem).lower()
+        if article_slug == slug:
+            return f"raw/articles/{article.name}"
+
+    return None
+
+
 def _find_existing_page(wiki_root: Path, page_type: str, name: str) -> Path | None:
     """Find an existing page by name."""
     subdir = type_to_dir(page_type)
@@ -288,18 +413,14 @@ def main() -> int:
     created_pages: list[str] = []
     updated_pages: list[str] = []
 
-    # 1. Determine raw_path
-    raw_path = None
-    raw_dir = wiki_root / "raw" / "articles"
-    if raw_dir.exists():
-        for article in sorted(raw_dir.glob("*.md")):
-            # Match by checking if title is in filename
-            if title and title[:10] in article.stem:
-                raw_path = f"raw/articles/{article.name}"
-                break
+    # 1. Determine raw_path from extract filename (robust against title special chars)
+    raw_path = find_raw_path_for_extract(wiki_root, extract_path)
 
     # 2. Create source page
     source_content = data.get("source_content", "")
+    source_slug = slugify(title) if title else ""
+    source_path = wiki_root / "wiki" / "sources" / f"{source_slug}.md" if source_slug else None
+
     if title and source_content:
         result = _create_page(
             wiki_root, template_dir, "source", title,
@@ -309,6 +430,10 @@ def main() -> int:
         if result:
             created_pages.append(f"source: {result.name}")
             print(f"  Created source: {result}")
+
+    # Fix raw_path on existing source page if empty
+    if source_path and raw_path:
+        fill_missing_raw_path(source_path, raw_path, wiki_root)
 
     # 3. Create new concept pages
     for concept in concepts:
@@ -432,6 +557,15 @@ def main() -> int:
         summary_content = _generate_summary(index_content)
         summary_path.write_text(summary_content, encoding="utf-8")
         print(f"  Updated: {summary_path}")
+
+    # 8. Fix dead wikilinks in newly created/updated pages
+    wiki_dir = wiki_root / "wiki"
+    all_touched = list(dict.fromkeys(
+        [str(Path(p)) for p in
+         [wiki_root / c.split(": ", 1)[-1] for c in created_pages if ": " in c] +
+         [wiki_root / u for u in updated_pages]]
+    ))
+    fix_dead_wikilinks(str(wiki_dir), all_touched)
 
     # Summary
     print(f"\nDone. Created {len(created_pages)} pages, updated {len(updated_pages)} pages.")

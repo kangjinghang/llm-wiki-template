@@ -33,21 +33,23 @@ When a new source is added to `raw/`:
    ```
    This auto-finds the first unprocessed article (no source page) and calls the LLM API independently.
    Output: `wiki/meta/extract-<slug>.json` — includes `page_content` for each concept/entity and `source_content` for the source page.
+   The extract path is also written to `wiki/meta/.last-extract` for reliable retrieval.
    Do NOT manually search for unprocessed articles (grep, ls, comm) — `--next` handles everything.
    **Do NOT ask the user which article to process.** Just run `--next` and process whichever article it returns. No `AskUserQuestion`, no listing, no choosing.
    If exit code ≠ 0 (all articles processed or API error), report to user and stop, or fall back to reading the source file directly.
-2. Create all pages and cascade-update existing pages in one call:
+2. **Read `wiki/meta/.last-extract`** to get the extract JSON path. This file is written by step 1 and contains the relative path. **Do NOT use `ls wiki/meta/extract-*.json | tail -1`** — it may return the wrong file.
+3. Create all pages and cascade-update existing pages in one call:
    ```
-   python scripts/create_pages_from_extract.py . wiki/meta/extract-<slug>.json
+   python scripts/create_pages_from_extract.py . <path-from-.last-extract>
    ```
    This single script handles: source page creation, new concept/entity page creation, cascade-updating existing pages (sources, tags), and updating index.md + index-summary.md.
    Do NOT call create_page.py, merge_frontmatter.py, or update_index.py separately — the combined script does all of that.
-3. Update `wiki/overview.md` — use `update_overview.py`:
+4. Update `wiki/overview.md` — use `update_overview.py`:
    ```
    python scripts/update_overview.py . --content "### <heading>\n\n<paragraph text with [[wikilinks]]>"
    ```
    The script inserts the section before `## 开放问题` automatically. Do NOT Read or Edit overview.md directly — the script handles it. Each section should cover the newly ingested concepts with `[[wikilink]]` references. This is NOT a table of contents — it's a synthetic narrative that a reader can read top-to-bottom to understand the entire knowledge base.
-4. Run `ingest_finish.py` to write log and commit — this replaces manual log writing and git commands:
+5. Run `ingest_finish.py` to write log and commit — this replaces manual log writing and git commands:
    ```
    python scripts/ingest_finish.py . \
      --title "<title>" \
@@ -56,7 +58,7 @@ When a new source is added to `raw/`:
    ```
    The script auto-detects created/updated files from `git status` — no need to specify `--created` or `--updated` manually. It automatically appends to `log/{date}.md` and runs `git add + commit`.
    Do NOT manually write log entries or run git add/commit after this step.
-5. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
+6. Briefly report what was done (files created/updated, key concepts added). Do NOT run `extract_knowledge.py` again — stop here and let the user `/clear` for the next article.
 
 A single source may touch 10–15 wiki pages. That is expected and correct.
 

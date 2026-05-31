@@ -401,6 +401,10 @@ def main() -> int:
     output_path = meta_dir / f"extract-{slug}.json"
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # Write marker file so LLM can reliably find the extract path (avoids garbled Bash output)
+    rel_extract = f"wiki/meta/extract-{slug}.json"
+    (meta_dir / ".last-extract").write_text(rel_extract, encoding="utf-8")
+
     print(f"Extracted: {output_path}")
     print(f"  Concepts: {len(result.get('concepts', []))}")
     print(f"  Entities: {len(result.get('entities', []))}")
