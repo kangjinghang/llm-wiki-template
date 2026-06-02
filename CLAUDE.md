@@ -39,6 +39,7 @@ When working inside this template repo, your role is **template maintenance**, n
 | `scripts/backfill_sources.py` | One-time backfill of empty sources fields via wikilink reverse inference |
 | `scripts/suggest_syntheses.py` | Identify cross-source analysis opportunities (3+ sources per concept) |
 | `scripts/promote_pages.py` | Promote page status based on content maturity (seed→developing→mature→evergreen) |
+| `scripts/create_syntheses.py` | Create synthesis pages from suggest_syntheses candidates via LLM API |
 
 ## Templates
 
