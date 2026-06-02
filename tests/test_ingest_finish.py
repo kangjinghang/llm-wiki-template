@@ -169,3 +169,124 @@ class TestDetectChanges:
         created, updated = detect_changes(tmp_path)
         assert created == ""
         assert updated == ""
+
+
+class TestLogDeduplication:
+    """Test that duplicate log entries for the same title are skipped."""
+
+    def test_duplicate_title_skipped(self, tmp_path):
+        """Same title on second run does not append a duplicate entry."""
+        import subprocess
+
+        SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "ingest_finish.py"
+        log_dir = tmp_path / "log"
+        log_dir.mkdir(parents=True)
+
+        # First call — should write entry
+        proc1 = subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path),
+             "--title", "Test Article", "--source", "raw/test.md", "--no-commit"],
+            capture_output=True, text=True,
+        )
+        assert proc1.returncode == 0, proc1.stderr
+
+        # Second call with same title — should skip log write
+        proc2 = subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path),
+             "--title", "Test Article", "--source", "raw/test.md", "--no-commit"],
+            capture_output=True, text=True,
+        )
+        assert proc2.returncode == 0, proc2.stderr
+        assert "SKIP" in proc2.stdout
+
+        # Log file should contain the entry exactly once
+        from datetime import date
+        log_path = log_dir / f"{date.today().isoformat()}.md"
+        content = log_path.read_text(encoding="utf-8")
+        assert content.count("## Ingest: Test Article") == 1
+
+    def test_different_title_appended(self, tmp_path):
+        """Different title on second run appends normally."""
+        import subprocess
+
+        SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "ingest_finish.py"
+        log_dir = tmp_path / "log"
+        log_dir.mkdir(parents=True)
+
+        # First call
+        proc1 = subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path),
+             "--title", "Article Alpha", "--source", "raw/a.md", "--no-commit"],
+            capture_output=True, text=True,
+        )
+        assert proc1.returncode == 0, proc1.stderr
+
+        # Second call with different title — should append
+        proc2 = subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path),
+             "--title", "Article Beta", "--source", "raw/b.md", "--no-commit"],
+            capture_output=True, text=True,
+        )
+        assert proc2.returncode == 0, proc2.stderr
+
+        # Both entries should be present
+        from datetime import date
+        log_path = log_dir / f"{date.today().isoformat()}.md"
+        content = log_path.read_text(encoding="utf-8")
+        assert "## Ingest: Article Alpha" in content
+        assert "## Ingest: Article Beta" in content
+        assert content.count("## Ingest:") == 2
+
+
+class TestExtractArchive:
+    """Test that extract JSON is archived after successful ingest."""
+
+    def test_archives_extract_json(self, tmp_path):
+        """Extract JSON moves to meta/archive/ after ingest."""
+        import subprocess
+
+        SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "ingest_finish.py"
+
+        # Set up meta dir with .last-extract pointing to an extract file
+        meta_dir = tmp_path / "wiki" / "meta"
+        meta_dir.mkdir(parents=True)
+        extract_file = meta_dir / "extract-test-article.json"
+        extract_file.write_text('{"title": "Test"}', encoding="utf-8")
+        (meta_dir / ".last-extract").write_text("wiki/meta/extract-test-article.json", encoding="utf-8")
+
+        log_dir = tmp_path / "log"
+        log_dir.mkdir(parents=True)
+
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path),
+             "--title", "Test Article", "--source", "raw/test.md", "--no-commit"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert "Archived" in proc.stdout
+
+        # Original file should be gone
+        assert not extract_file.exists()
+        # Archive should contain the file
+        archive_dir = meta_dir / "archive"
+        assert archive_dir.exists()
+        assert (archive_dir / "extract-test-article.json").exists()
+
+    def test_no_archive_when_no_last_extract(self, tmp_path):
+        """No error when .last-extract doesn't exist."""
+        import subprocess
+
+        SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "ingest_finish.py"
+
+        meta_dir = tmp_path / "wiki" / "meta"
+        meta_dir.mkdir(parents=True)
+        log_dir = tmp_path / "log"
+        log_dir.mkdir(parents=True)
+
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), str(tmp_path),
+             "--title", "Test", "--source", "raw/test.md", "--no-commit"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert "Archived" not in proc.stdout

@@ -19,6 +19,14 @@ import re
 import sys
 from pathlib import Path
 
+# Ensure stdout/stderr handle Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+from slug_utils import slugify
+
 # Markers to search for, in priority order
 _INSERT_BEFORE_MARKERS = [
     "\n## 开放问题",
@@ -73,6 +81,33 @@ def insert_section(content: str, new_section: str) -> tuple[str, bool]:
     return content, True
 
 
+def check_dead_wikilinks(content: str, wiki_dir: Path) -> list[str]:
+    """Check wikilinks in content against existing wiki pages.
+
+    Returns a list of dead link targets (links with no matching page file).
+    Prints warnings to stderr but does not modify content.
+    """
+    # Collect all existing page filenames (stems) across wiki subdirectories
+    existing_pages: set[str] = set()
+    if wiki_dir.exists():
+        for p in wiki_dir.rglob("*.md"):
+            existing_pages.add(p.stem)
+
+    # Extract all wikilink targets
+    targets = re.findall(r"\[\[([^\]]+)\]\]", content)
+    dead = []
+    for target in targets:
+        # Handle alias syntax: [[slug|Display]] → use slug part only
+        slug = target.split("|")[0].strip() if "|" in target else target.strip()
+        if slug not in existing_pages:
+            dead.append(slug)
+
+    if dead:
+        print(f"  ⚠️  Dead wikilinks in overview content: {dead}", file=sys.stderr)
+
+    return dead
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Insert a new ### section into wiki/overview.md."
@@ -99,8 +134,23 @@ def main() -> int:
         print("No changes needed: wiki/overview.md")
         return 0
 
+    # Warn about dead wikilinks (non-blocking)
+    wiki_dir = wiki_root / "wiki"
+    check_dead_wikilinks(section_text, wiki_dir)
+
     overview_path.write_text(content, encoding="utf-8")
     print(f"Updated: {overview_path}")
+
+    # Warn if overview.md is getting too large
+    line_count = content.count("\n") + 1
+    size_kb = len(content.encode("utf-8")) // 1024
+    if line_count > 2000 or size_kb > 300:
+        print(
+            f"  ⚠️  overview.md is large ({line_count} lines, {size_kb}KB). "
+            "Consider consolidating older sections into topic-specific syntheses.",
+            file=sys.stderr,
+        )
+
     return 0
 
 

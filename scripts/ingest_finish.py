@@ -31,6 +31,12 @@ import sys
 from datetime import date
 from pathlib import Path
 
+# Ensure stdout/stderr handle Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 def detect_changes(wiki_root: Path) -> tuple[str, str]:
     """Auto-detect created and updated files from git status.
@@ -146,19 +152,34 @@ def main() -> int:
 
     if log_path.exists():
         existing = log_path.read_text(encoding="utf-8")
-        # Ensure blank line separation between entries
-        separator = "" if existing.endswith("\n\n") else "\n"
-        log_path.write_text(existing + separator + entry, encoding="utf-8")
+        # Deduplication: skip if same title already logged today
+        if f"## Ingest: {args.title}" in existing:
+            print(f"SKIP (duplicate log entry): {args.title}")
+        else:
+            separator = "" if existing.endswith("\n\n") else "\n"
+            log_path.write_text(existing + separator + entry, encoding="utf-8")
+            print(f"Log entry written to {log_path}")
     else:
         log_path.write_text(f"# {today}\n\n{entry}", encoding="utf-8")
-
-    print(f"Log entry written to {log_path}")
+        print(f"Log entry written to {log_path}")
 
     # Git commit
     if not args.no_commit:
         subprocess.run(["git", "add", "-A"], cwd=str(wiki_root), check=True)
         subprocess.run(["git", "commit", "-m", f"ingest: {args.title}"], cwd=str(wiki_root), check=True)
         print(f"Committed: ingest: {args.title}")
+
+    # Archive extract JSON after successful ingest
+    last_extract_path = wiki_root / "wiki" / "meta" / ".last-extract"
+    if last_extract_path.exists():
+        rel_extract = last_extract_path.read_text(encoding="utf-8").strip()
+        extract_file = wiki_root / rel_extract
+        if extract_file.exists():
+            archive_dir = wiki_root / "wiki" / "meta" / "archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            dest = archive_dir / extract_file.name
+            extract_file.rename(dest)
+            print(f"Archived: {extract_file.name} → meta/archive/")
 
     return 0
 

@@ -18,6 +18,12 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
+# Ensure stdout/stderr handle Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 def scaffold(root: str, title: str) -> None:
     root_path = Path(root).resolve()
@@ -60,7 +66,8 @@ def scaffold(root: str, title: str) -> None:
     for script_name in [
         "scaffold.py", "create_page.py", "lint_wiki.py", "audit_review.py",
         "extract_knowledge.py", "merge_frontmatter.py", "ingest_finish.py",
-        "update_index.py", "update_overview.py",
+        "update_index.py", "update_overview.py", "create_pages_from_extract.py",
+        "slug_utils.py",
     ]:
         src = script_src / script_name
         if src.exists():

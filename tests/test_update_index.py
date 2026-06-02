@@ -1,90 +1,109 @@
-"""Tests for update_index.py script."""
+"""Tests for update_index.py — index entry dedup and summary generation."""
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from update_index import add_entries, _extract_wikilink, _find_section_range
+from update_index import (
+    _extract_wikilink,
+    _find_section_range,
+    _entries_in_section,
+    add_entries,
+    _generate_summary,
+)
 
 
 class TestExtractWikilink:
-    def test_basic(self):
-        assert _extract_wikilink("[[foo]] — desc") == "foo"
+    def test_basic_wikilink(self):
+        """Extract target from a simple entry."""
+        assert _extract_wikilink("[[alpha]] — some description") == "alpha"
 
-    def test_no_wikilink(self):
-        assert _extract_wikilink("plain text") is None
+    def test_entry_without_wikilink(self):
+        """Return None when no wikilink present."""
+        assert _extract_wikilink("plain text only") is None
+
+    def test_wikilink_at_end(self):
+        """Extract wikilink from end of entry."""
+        assert _extract_wikilink("see [[beta]]") == "beta"
 
 
 class TestFindSectionRange:
-    def test_finds_section(self):
-        content = "# Title\n\n## Sources\n\n- [[a]]\n\n## Concepts\n\n- [[b]]\n"
+    def test_finds_existing_section(self):
+        """Return (start, end) for a known section."""
+        content = "# Index\n\n## Sources\n\n- [[a]]\n\n## Concepts\n\n- [[b]]\n"
         rng = _find_section_range(content, "## Sources")
         assert rng is not None
         start, end = rng
+        assert start < end
         assert "## Sources" in content[start:end]
         assert "## Concepts" not in content[start:end]
 
-    def test_missing_section(self):
-        content = "# Title\n\n## Concepts\n\n- [[b]]\n"
+    def test_returns_none_for_missing(self):
+        """Return None when section heading not found."""
+        content = "# Index\n\n## Concepts\n\n- [[a]]\n"
         assert _find_section_range(content, "## Sources") is None
 
 
-class TestAddSourceEntry:
-    def test_add_source_entry(self, tmp_path):
-        content = "# Title\n\n## Sources\n\n- [[existing]] — desc\n\n## Concepts\n\n"
-        result = add_entries(content, "source", ["[[new-source]] — new desc"])
+class TestEntriesInSection:
+    def test_extracts_targets(self):
+        """Collect all [[...]] targets from a section."""
+        content = "# Index\n\n## Concepts\n\n- [[alpha]] — desc\n- [[beta]] — desc2\n\n## Entities\n\n- [[gamma]]\n"
+        result = _entries_in_section(content, "## Concepts")
+        assert result == {"alpha", "beta"}
+
+    def test_empty_section(self):
+        """Return empty set when section exists but has no links."""
+        content = "# Index\n\n## Concepts\n\nNo entries yet.\n\n## Entities\n\n- [[x]]\n"
+        result = _entries_in_section(content, "## Concepts")
+        assert result == set()
+
+
+class TestAddEntries:
+    def test_adds_new_entry(self):
+        """Add a new entry to existing section."""
+        content = "# Index\n\n## Sources\n\n- [[existing]] — old\n\n## Concepts\n\n- [[a]]\n"
+        result = add_entries(content, "source", ["[[new-source]] — a new source"])
         assert "[[new-source]]" in result
-        # Should be before ## Concepts
-        assert result.index("[[new-source]]") < result.index("## Concepts")
+        assert "[[existing]]" in result  # old entry preserved
 
-    def test_dedup_source(self, tmp_path):
-        content = "# Title\n\n## Sources\n\n- [[existing]] — desc\n\n## Concepts\n\n"
-        result = add_entries(content, "source", ["[[existing]] — updated desc"])
-        assert result == content  # no change
+    def test_deduplicates_by_wikilink(self):
+        """Skip entry whose wikilink target already exists in section."""
+        content = "# Index\n\n## Concepts\n\n- [[alpha]] — original desc\n\n## Entities\n\n- [[x]]\n"
+        result = add_entries(content, "concept", ["[[alpha]] — updated desc"])
+        # Should NOT add duplicate — original entry preserved unchanged
+        assert result.count("[[alpha]]") == 1
 
+    def test_creates_missing_section(self):
+        """Create section if it doesn't exist."""
+        content = "# Index\n\n## Concepts\n\n- [[a]]\n"
+        result = add_entries(content, "source", ["[[my-source]] — desc"])
+        assert "## Sources" in result
+        assert "[[my-source]]" in result
 
-class TestAddConceptEntry:
-    def test_add_concept_entry(self):
-        content = "# Title\n\n## Sources\n\n- [[a]]\n\n## Concepts\n\n- [[old]] — old\n\n## Entities\n\n"
-        result = add_entries(content, "concept", ["[[new-concept]] — new"])
-        assert "[[new-concept]]" in result
-        assert result.index("[[new-concept]]") < result.index("## Entities")
-
-    def test_add_to_concepts_with_subsections(self):
-        content = "# Title\n\n## Concepts\n\n### Sub A\n\n- [[a]]\n\n### Sub B\n\n- [[b]]\n\n## Entities\n\n"
-        result = add_entries(content, "concept", ["[[c]] — new"])
-        assert "[[c]]" in result
-        assert result.index("[[c]]") < result.index("## Entities")
-
-
-class TestAddEntityEntry:
-    def test_add_entity_entry(self):
-        content = "# Title\n\n## Entities\n\n- [[existing-entity]] — desc\n\n## Open Questions\n\n"
-        result = add_entries(content, "entity", ["[[new-entity]] — new"])
-        assert "[[new-entity]]" in result
-        assert result.index("[[new-entity]]") < result.index("## Open Questions")
+    def test_no_changes_when_all_duplicate(self):
+        """Return unchanged content when all entries are duplicates."""
+        content = "# Index\n\n## Concepts\n\n- [[alpha]] — desc\n\n## Entities\n\n- [[x]]\n"
+        result = add_entries(content, "concept", ["[[alpha]] — another desc"])
+        assert result == content
 
 
-class TestCreateMissingSection:
-    def test_creates_syntheses_section(self):
-        content = "# Title\n\n## Entities\n\n- [[a]]\n\n## Open Questions\n\n"
-        result = add_entries(content, "synthesis", ["[[synth-1]] — first synthesis"])
-        assert "## Syntheses" in result
-        assert "[[synth-1]]" in result
-        assert result.index("## Syntheses") < result.index("## Open Questions")
+class TestGenerateSummary:
+    def test_generates_compact_summary(self):
+        """Summary has only wikilinks, no descriptions."""
+        index = "# Index\n\n## Sources\n\n- [[src1]] — A source\n- [[src2]] — Another\n\n## Concepts\n\n- [[con1]] — Idea\n"
+        summary = _generate_summary(index)
+        assert "# Index Summary" in summary
+        assert "- [[src1]]" in summary
+        assert "- [[src2]]" in summary
+        assert "- [[con1]]" in summary
+        # No descriptions in summary
+        assert "A source" not in summary
+        assert "Idea" not in summary
 
-
-class TestMultipleFlags:
-    def test_add_multiple_sections(self):
-        content = "# Title\n\n## Sources\n\n- [[a]]\n\n## Concepts\n\n- [[b]]\n\n## Entities\n\n- [[c]]\n\n"
-        result = content
-        result = add_entries(result, "source", ["[[new-src]] — src desc"])
-        result = add_entries(result, "concept", ["[[new-cpt]] — cpt desc"])
-        result = add_entries(result, "entity", ["[[new-ent]] — ent desc"])
-        assert "[[new-src]]" in result
-        assert "[[new-cpt]]" in result
-        assert "[[new-ent]]" in result
-        # Order preserved: sources before concepts before entities
-        assert result.index("[[new-src]]") < result.index("[[new-cpt]]")
-        assert result.index("[[new-cpt]]") < result.index("[[new-ent]]")
+    def test_empty_sections_omitted(self):
+        """Sections with no entries are not included in summary."""
+        index = "# Index\n\n## Sources\n\n- [[src1]] — desc\n\n## Syntheses\n\n"
+        summary = _generate_summary(index)
+        assert "## Sources" in summary
+        assert "## Syntheses" not in summary

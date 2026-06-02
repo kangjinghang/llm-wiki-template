@@ -27,11 +27,18 @@ When working inside this template repo, your role is **template maintenance**, n
 |--------|---------|
 | `scripts/scaffold.py` | Bootstrap a new wiki — copies scripts + templates, generates CLAUDE.md from `_schema/` |
 | `scripts/create_page.py` | Create a wiki page with correct frontmatter from a template |
+| `scripts/create_pages_from_extract.py` | Combined page creation from extract JSON — handles source + concepts + entities + index in one call |
 | `scripts/extract_knowledge.py` | Extract concepts/entities/relations from article via independent LLM API call |
 | `scripts/merge_frontmatter.py` | Deterministically merge array fields (sources, tags, related) into page frontmatter |
 | `scripts/ingest_finish.py` | Write ingest log entry and git commit |
-| `scripts/lint_wiki.py` | 15-check health check for a wiki instance |
+| `scripts/lint_wiki.py` | 21-check health check for a wiki instance |
 | `scripts/audit_review.py` | List and group open audit feedback by target file |
+| `scripts/update_index.py` | Add deduplicated entries to wiki/index.md by section |
+| `scripts/update_overview.py` | Insert a new ### section into wiki/overview.md |
+| `scripts/slug_utils.py` | Shared slug generation (slugify, derive_slug) |
+| `scripts/backfill_sources.py` | One-time backfill of empty sources fields via wikilink reverse inference |
+| `scripts/suggest_syntheses.py` | Identify cross-source analysis opportunities (3+ sources per concept) |
+| `scripts/promote_pages.py` | Promote page status based on content maturity (seed→developing→mature→evergreen) |
 
 ## Templates
 

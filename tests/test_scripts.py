@@ -416,7 +416,7 @@ class TestTagTaxonomyLint:
         (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
         # Page with a tag NOT in taxonomy
         (tmp_path / "wiki" / "concepts" / "test.md").write_text(
-            '---\ntitle: Test\ntype: concept\ntags: [deep-learning, fake-tag]\n---\nBody\n',
+            '---\ntitle: Test\ntype: concept\ntags: [deep-learning, fake-tag]\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -438,7 +438,7 @@ class TestTagTaxonomyLint:
         (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[测试]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "测试.md").write_text(
-            '---\ntitle: Test\ntype: concept\ntags: [deep-learning, nlp]\n---\nBody\n',
+            '---\ntitle: Test\ntype: concept\ntags: [deep-learning, nlp]\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -455,7 +455,7 @@ class TestTagTaxonomyLint:
         (tmp_path / "CLAUDE.md").write_text("## Just Docs\n\nNo taxonomy.\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "测试.md").write_text(
-            '---\ntitle: Test\ntype: concept\ntags: [anything]\n---\nBody\n',
+            '---\ntitle: Test\ntype: concept\ntags: [anything]\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -476,7 +476,7 @@ class TestStalePageLint:
         (tmp_path / "audit").mkdir()
         (tmp_path / "wiki" / "index.md").write_text("# Index\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "stale.md").write_text(
-            '---\ntitle: Stale\ntype: concept\nreview_by: "2020-01-01"\n---\nBody\n',
+            '---\ntitle: Stale\ntype: concept\nreview_by: "2020-01-01"\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -494,7 +494,7 @@ class TestStalePageLint:
         (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[新鲜]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "新鲜.md").write_text(
-            '---\ntitle: Fresh\ntype: concept\nreview_by: "2099-12-31"\n---\nBody\n',
+            '---\ntitle: Fresh\ntype: concept\nreview_by: "2099-12-31"\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -511,7 +511,7 @@ class TestStalePageLint:
         (tmp_path / "wiki" / "overview.md").write_text("# Overview\n", encoding="utf-8")
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[空白]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "concepts" / "空白.md").write_text(
-            '---\ntitle: Empty\ntype: concept\nreview_by: ""\n---\nBody\n',
+            '---\ntitle: Empty\ntype: concept\nreview_by: ""\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -609,7 +609,7 @@ class TestComputeHash:
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test-src]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "sources" / "test-src.md").write_text(
             f'---\ntitle: Test\ntype: source\nraw_path: "raw/articles/test.md"\n'
-            f'raw_hash: "{original_hash}"\n---\nBody\n',
+            f'raw_hash: "{original_hash}"\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         # Modify the raw file
@@ -640,7 +640,7 @@ class TestComputeHash:
         (tmp_path / "wiki" / "index.md").write_text("# Index\n\n- [[test-src]]\n", encoding="utf-8")
         (tmp_path / "wiki" / "sources" / "test-src.md").write_text(
             f'---\ntitle: Test\ntype: source\nraw_path: "raw/articles/test.md"\n'
-            f'raw_hash: "{content_hash}"\n---\nBody\n',
+            f'raw_hash: "{content_hash}"\n---\nThis is a test page with enough words to pass the thin page check in lint.\n',
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -705,7 +705,7 @@ class TestNamingConventionLint:
         )
         # Create a page with uppercase filename (LLM might do this)
         (wiki / "wiki" / "concepts" / "ESP-Factor.md").write_text(
-            "---\ntitle: ESP Factor\ntype: concept\n---\nContent\n",
+            "---\ntitle: ESP Factor\ntype: concept\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n",
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -724,7 +724,7 @@ class TestNamingConventionLint:
             capture_output=True, text=True, encoding="utf-8",
         )
         (wiki / "wiki" / "concepts" / "esp因子.md").write_text(
-            "---\ntitle: ESP Factor\ntype: concept\n---\nContent\n",
+            "---\ntitle: ESP Factor\ntype: concept\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n",
             encoding="utf-8",
         )
         # Add to index to avoid orphan/missing-index issues
@@ -771,7 +771,7 @@ class TestRawHashPresence:
         raw.write_text("Some content", encoding="utf-8")
         page = wiki / "wiki" / "sources" / "test-source.md"
         page.write_text(
-            '---\ntitle: "Test"\ntype: source\nraw_path: "raw/articles/test.md"\n---\nContent\n',
+            '---\ntitle: "Test"\ntype: source\nraw_path: "raw/articles/test.md"\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n',
             encoding="utf-8",
         )
         # Add to index
@@ -800,7 +800,7 @@ class TestSourcePagesNoSourcesField:
         # Create a source page with sources field (should be flagged)
         page = wiki / "wiki" / "sources" / "bad-source.md"
         page.write_text(
-            '---\ntitle: "Bad"\ntype: source\nsources: []\n---\nContent\n',
+            '---\ntitle: "Bad"\ntype: source\nsources: []\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n',
             encoding="utf-8",
         )
         # Add to index
@@ -830,7 +830,7 @@ class TestSourcePagesNoSourcesField:
         raw.write_text("Content", encoding="utf-8")
         page = wiki / "wiki" / "sources" / "good-source.md"
         page.write_text(
-            '---\ntitle: "Good"\ntype: source\nraw_path: "raw/articles/good.md"\n---\nContent\n',
+            '---\ntitle: "Good"\ntype: source\nraw_path: "raw/articles/good.md"\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n',
             encoding="utf-8",
         )
         index = wiki / "wiki" / "index.md"
@@ -893,13 +893,13 @@ class TestInlineWikilinkDensity:
         )
         # Create target pages so no dead links are reported
         (wiki / "wiki" / "concepts" / "其他概念.md").write_text(
-            '---\ntitle: "Other"\ntype: concept\n---\nStub\n', encoding="utf-8",
+            '---\ntitle: "Other"\ntype: concept\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n', encoding="utf-8",
         )
         (wiki / "wiki" / "entities" / "另一实体.md").write_text(
-            '---\ntitle: "Entity"\ntype: entity\n---\nStub\n', encoding="utf-8",
+            '---\ntitle: "Entity"\ntype: entity\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n', encoding="utf-8",
         )
         (wiki / "wiki" / "sources" / "test-source.md").write_text(
-            '---\ntitle: "Source"\ntype: source\n---\nStub\n', encoding="utf-8",
+            '---\ntitle: "Source"\ntype: source\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n', encoding="utf-8",
         )
         # Create a concept page with wikilinks ONLY in Related Pages (body has none)
         page = wiki / "wiki" / "concepts" / "测试概念.md"
@@ -962,13 +962,13 @@ class TestInlineWikilinkDensity:
         )
         # Create target pages so no dead links are reported
         (wiki / "wiki" / "concepts" / "其他概念.md").write_text(
-            '---\ntitle: "Other"\ntype: concept\n---\nStub\n', encoding="utf-8",
+            '---\ntitle: "Other"\ntype: concept\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n', encoding="utf-8",
         )
         (wiki / "wiki" / "entities" / "另一实体.md").write_text(
-            '---\ntitle: "Entity"\ntype: entity\n---\nStub\n', encoding="utf-8",
+            '---\ntitle: "Entity"\ntype: entity\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n', encoding="utf-8",
         )
         (wiki / "wiki" / "sources" / "test-source.md").write_text(
-            '---\ntitle: "Source"\ntype: source\n---\nStub\n', encoding="utf-8",
+            '---\ntitle: "Source"\ntype: source\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n', encoding="utf-8",
         )
         page = wiki / "wiki" / "concepts" / "测试概念.md"
         page.write_text(
@@ -1129,7 +1129,7 @@ class TestPureASCIIFilename:
         # Create a stub target for the inline wikilink to avoid dead-link failures
         stub = wiki / "wiki" / "concepts" / "test-concept.md"
         stub.write_text(
-            '---\ntitle: "Test"\ntype: concept\n---\nStub\n',
+            '---\ntitle: "Test"\ntype: concept\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n',
             encoding="utf-8",
         )
         # Create a concept page with English-only filename
@@ -1179,7 +1179,7 @@ class TestPureASCIIFilename:
         )
         # Create the source target so no dead wikilinks
         (wiki / "wiki" / "sources" / "test-source.md").write_text(
-            '---\ntitle: "Source"\ntype: source\n---\nStub\n',
+            '---\ntitle: "Source"\ntype: source\n---\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n',
             encoding="utf-8",
         )
         page = wiki / "wiki" / "concepts" / "聪明钱因子.md"
@@ -1200,7 +1200,7 @@ class TestPureASCIIFilename:
             '---\n\n'
             '# 聪明钱因子\n\n'
             '## 定义\n\n'
-            '聪明钱因子追踪机构资金流向。\n',
+            '聪明钱因子追踪机构资金流向。这是一个测试页面需要足够多的文字才能通过空壳页面检查。\n',
             encoding="utf-8",
         )
         index = wiki / "wiki" / "index.md"
@@ -1244,7 +1244,7 @@ class TestPureASCIIFilename:
             'raw_hash: "' + hashlib.sha256(b'Content').hexdigest() + '"\n'
             'review_by: ""\n'
             '---\n\n'
-            '# English Report\n\nContent\n',
+            '# English Report\n\nThis is a test page with enough words to pass the thin page lint check in the wiki pipeline.\n',
             encoding="utf-8",
         )
         index = wiki / "wiki" / "index.md"

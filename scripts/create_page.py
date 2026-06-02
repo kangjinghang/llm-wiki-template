@@ -37,21 +37,15 @@ import sys
 from datetime import date
 from pathlib import Path
 
+# Ensure stdout/stderr handle Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+from slug_utils import slugify
+
 VALID_TYPES = {"source", "concept", "entity", "synthesis", "comparison"}
-
-
-def slugify(title: str) -> str:
-    """Convert a title to a filesystem-friendly slug.
-
-    Keeps Chinese characters, ASCII letters/digits. Replaces other
-    characters with '-', then collapses repeated separators.
-    """
-    slug = title.lower().strip()
-    slug = re.sub(r"[^\w\s\u4e00-\u9fff-]+", "-", slug)
-    slug = re.sub(r"[\s_]+", "-", slug)
-    slug = re.sub(r"-{2,}", "-", slug)
-    slug = slug.strip("-")
-    return slug or "untitled"
 
 
 def load_template(template_dir: Path, page_type: str) -> str:

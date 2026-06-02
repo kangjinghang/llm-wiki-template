@@ -25,6 +25,11 @@ Checks:
   14. Inline wikilink density — pages with >= 80 words of body should have at least 2 inline wikilinks
   15. Non-ASCII filename — concept/entity pages should use Chinese filenames, not pure-ASCII
   16. Frontmatter sanitization — auto-fix code-fence wrappers, `frontmatter:` prefixes, invalid wikilink lists
+  17. Duplicate index entries — same [[target]] appearing 2+ times in one index.md section
+  18. Case-insensitive duplicate entries — [[PEAD效应]] and [[pead效应]] coexisting in same section
+  19. Cross-directory slug collisions — same filename in different wiki subdirectories
+  20. Thin pages — pages with fewer than 15 words of body content
+  21. Non-seed empty sources — concept/entity pages with status != seed but sources empty
 
 Exit codes:
   0 — no issues found
@@ -43,6 +48,18 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 if sys.stderr and hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+
+def count_words(text: str) -> int:
+    """Count words in mixed Chinese/English text.
+
+    Chinese characters are counted individually (each hanzi = 1 word).
+    English/ASCII tokens are counted after whitespace splitting (len > 1).
+    """
+    hanzi = len(re.findall(r'[一-鿿]', text))
+    # Remove Chinese characters then count remaining whitespace-separated tokens
+    remainder = re.sub(r'[一-鿿]', ' ', text)
+    ascii_words = len([w for w in remainder.split() if len(w) > 1])
+    return hanzi + ascii_words
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 LOG_FILENAME_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\.md$")
@@ -590,15 +607,15 @@ def lint(root: str) -> int:
             "", body, flags=re.DOTALL,
         )
         body_clean = re.sub(r"<!-- human:start -->.*?<!-- human:end -->", "", body_clean, flags=re.DOTALL)
-        # Count words (rough: split on whitespace, filter short tokens)
-        words = [w for w in body_clean.split() if len(w) > 1]
-        if len(words) < 80:
+        # Count words (handles Chinese chars individually)
+        words = count_words(body_clean)
+        if words < 80:
             continue
         # Count inline wikilinks in the cleaned body
         inline_links = re.findall(r"\[\[([^\]]+)\]\]", body_clean)
         inline_link_count = len(inline_links)
         if inline_link_count < 2:
-            low_density.append((rel, len(words), inline_link_count))
+            low_density.append((rel, words, inline_link_count))
     if low_density:
         print(f"\n⚠️  {len(low_density)} page(s) with fewer than 2 inline wikilinks in body (>= 80 words):")
         for path, wc, lc in low_density:
@@ -657,6 +674,137 @@ def lint(root: str) -> int:
             print(f"   {path} — {fix}")
     else:
         print("✅ No frontmatter sanitization issues")
+
+    # ── Pass 17: duplicate index entries (exact match per section) ────────
+    if index_path.exists():
+        index_text = index_path.read_text(encoding="utf-8")
+        # Split index into sections by ## headings
+        section_pattern = re.compile(r"^##\s+(.+)$", re.MULTILINE)
+        section_starts = [(m.group(1).strip(), m.start()) for m in section_pattern.finditer(index_text)]
+        dup_index_issues: list[tuple[str, str, int]] = []  # (section, target, count)
+        for si, (sec_name, sec_start) in enumerate(section_starts):
+            sec_end = section_starts[si + 1][1] if si + 1 < len(section_starts) else len(index_text)
+            sec_body = index_text[sec_start:sec_end]
+            targets_in_sec = re.findall(r"-\s*\[\[([^\]|]+)", sec_body)
+            from collections import Counter as _Counter
+            for target, cnt in _Counter(targets_in_sec).items():
+                if cnt > 1:
+                    dup_index_issues.append((sec_name, target, cnt))
+        if dup_index_issues:
+            print(f"\n🟡 Duplicate index entries ({len(dup_index_issues)}):")
+            for sec, target, cnt in dup_index_issues:
+                print(f"   ## {sec}: [[{target}]] ×{cnt}")
+            issues += len(dup_index_issues)
+        else:
+            print("✅ No duplicate index entries")
+    else:
+        print("⚠️  wiki/index.md not found — skipping duplicate index check")
+
+    # ── Pass 18: case-insensitive duplicate index entries ─────────────────
+    # On macOS (APFS) and Windows (NTFS), [[PEAD效应]] and [[pead效应]] point to
+    # the SAME file. This check catches index.md entries that differ only in case.
+    # IMPORTANT: Fix by deduplicating index.md ONLY. Do NOT delete files — they
+    # are the same inode on case-insensitive filesystems.
+    if index_path.exists():
+        index_text = index_path.read_text(encoding="utf-8")
+        section_pattern2 = re.compile(r"^##\s+(.+)$", re.MULTILINE)
+        section_starts2 = [(m.group(1).strip(), m.start()) for m in section_pattern2.finditer(index_text)]
+        case_dup_issues: list[tuple[str, list[str]]] = []  # (section, [variants])
+        for si, (sec_name, sec_start) in enumerate(section_starts2):
+            sec_end = section_starts2[si + 1][1] if si + 1 < len(section_starts2) else len(index_text)
+            sec_body = index_text[sec_start:sec_end]
+            targets = re.findall(r"-\s*\[\[([^\]|]+)", sec_body)
+            lower_map: dict[str, list[str]] = defaultdict(list)
+            for t in targets:
+                lower_map[t.lower()].append(t)
+            for _low, variants in lower_map.items():
+                unique_variants = list(set(variants))
+                if len(unique_variants) > 1:
+                    case_dup_issues.append((sec_name, unique_variants))
+        if case_dup_issues:
+            print(f"\n🟡 Case-insensitive duplicate index entries ({len(case_dup_issues)}):")
+            print("   ⚠️  Fix: deduplicate index.md entries ONLY. Do NOT delete files (case-insensitive FS: macOS/Windows).", file=sys.stderr)
+            for sec, variants in case_dup_issues:
+                print(f"   ## {sec}: {' / '.join(variants)}")
+            issues += len(case_dup_issues)
+        else:
+            print("✅ No case-insensitive duplicate index entries")
+    else:
+        print("⚠️  wiki/index.md not found — skipping case-insensitive duplicate check")
+
+    # ── Pass 19: cross-directory slug collisions ──────────────────────────
+    slug_dirs: dict[str, list[str]] = defaultdict(list)  # stem → [rel_paths]
+    for md_file in all_wiki_files:
+        rel = str(md_file.relative_to(wiki_path))
+        parts = rel.replace("\\", "/").split("/")
+        if len(parts) < 2:
+            continue
+        slug_dirs[md_file.stem].append(rel)
+    cross_dir_collisions = {k: v for k, v in slug_dirs.items() if len(v) > 1}
+    if cross_dir_collisions:
+        print(f"\n🟡 Cross-directory slug collisions ({len(cross_dir_collisions)}):")
+        for stem, paths in cross_dir_collisions.items():
+            print(f"   {stem}: {' vs '.join(paths)}")
+        issues += len(cross_dir_collisions)
+    else:
+        print("✅ No cross-directory slug collisions")
+
+    # ── Pass 20: thin pages (< 15 words of body) ─────────────────────────
+    thin_pages: list[tuple[str, int]] = []  # (rel_path, word_count)
+    for md_file in all_wiki_files:
+        if md_file.name in ("index.md", "overview.md", "index-summary.md"):
+            continue
+        text = md_file.read_text(encoding="utf-8")
+        parts = text.split("---", 2)
+        if len(parts) < 3:
+            continue
+        body = parts[2].strip()
+        wc = count_words(body)
+        if wc < 15:
+            rel = str(md_file.relative_to(root_path))
+            thin_pages.append((rel, wc))
+    if thin_pages:
+        print(f"\n🟡 Thin pages (< 15 words of body, {len(thin_pages)}):")
+        for path, wc in thin_pages:
+            print(f"   {path} ({wc} words)")
+        issues += len(thin_pages)
+    else:
+        print("✅ No thin pages")
+
+    # ── Pass 21: non-seed pages with empty sources ───────────────────────────
+    # Concept/entity pages with status != seed should have sources populated.
+    # This catches pipeline regressions where _create_page() fails to pass sources.
+    from merge_frontmatter import _extract_existing_list_items as _eli
+    empty_sources_non_seed: list[tuple[str, str]] = []  # (rel_path, status)
+    for md_file in all_wiki_files:
+        rel = str(md_file.relative_to(wiki_path))
+        parts = rel.replace("\\", "/").split("/")
+        if len(parts) < 2:
+            continue
+        subdir = parts[0]
+        if subdir not in ("concepts", "entities"):
+            continue
+        text = md_file.read_text(encoding="utf-8")
+        text_parts = text.split("---", 2)
+        if len(text_parts) < 3:
+            continue
+        raw_fm = text_parts[1]
+        fm = parse_frontmatter(text)
+        if fm is None:
+            continue
+        status = str(fm.get("status", "")).strip().strip('"').strip("'")
+        if status in ("seed", ""):
+            continue
+        existing_items = _eli(raw_fm, "sources")
+        if not existing_items:
+            empty_sources_non_seed.append((str(md_file.relative_to(root_path)), status))
+    if empty_sources_non_seed:
+        print(f"\n🟡 Non-seed pages with empty sources ({len(empty_sources_non_seed)}):")
+        for path, status in empty_sources_non_seed:
+            print(f"   {path} (status: {status})")
+        issues += len(empty_sources_non_seed)
+    else:
+        print("✅ No non-seed pages with empty sources")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print(f"\n{'─'*40}")

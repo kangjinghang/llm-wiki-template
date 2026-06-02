@@ -235,3 +235,87 @@ class TestFindRawPathForExtract:
 
         result = find_raw_path_for_extract(tmp_path, Path("extract-my-article.json"))
         assert result == "raw/articles/[202301010000]my-article.md"
+
+
+class TestNormalizeWikilinkSlugs:
+    """Test that wikilinks in generated content are slug-normalized."""
+
+    def test_dot_becomes_hyphen_in_wikilink(self):
+        """[[修正超预期股票池2.0]] should become [[修正超预期股票池2-0]]."""
+        from create_pages_from_extract import normalize_wikilink_slugs
+        text = "See [[修正超预期股票池2.0]] for details."
+        result = normalize_wikilink_slugs(text)
+        assert "[[修正超预期股票池2-0]]" in result
+        assert "[[修正超预期股票池2.0]]" not in result
+
+    def test_preserves_already_slugified(self):
+        """Already correct slugs are unchanged."""
+        from create_pages_from_extract import normalize_wikilink_slugs
+        text = "See [[修正超预期股票池2-0]] and [[alpha-strategy]]."
+        result = normalize_wikilink_slugs(text)
+        assert result == text
+
+    def test_preserves_alias_links(self):
+        """[[slug|Display]] — only slug part is normalized."""
+        from create_pages_from_extract import normalize_wikilink_slugs
+        text = "[[修正超预期股票池2.0|Plus 2.0 组合]] is useful."
+        result = normalize_wikilink_slugs(text)
+        assert "[[修正超预期股票池2-0|Plus 2.0 组合]]" in result
+
+    def test_no_wikilinks_returns_same(self):
+        """Plain text without wikilinks is unchanged."""
+        from create_pages_from_extract import normalize_wikilink_slugs
+        text = "No links here."
+        result = normalize_wikilink_slugs(text)
+        assert result == text
+
+    def test_multiple_links_all_normalized(self):
+        """All wikilinks in a block are normalized."""
+        from create_pages_from_extract import normalize_wikilink_slugs
+        text = "[[Foo Bar]] and [[Hello World!]] and [[修正超预期股票池2.0]]."
+        result = normalize_wikilink_slugs(text)
+        assert "[[foo-bar]]" in result
+        assert "[[hello-world]]" in result
+        assert "[[修正超预期股票池2-0]]" in result
+
+
+class TestIndexEntriesSlugified:
+    """Test that entries written to index.md use slugified wikilinks."""
+
+    def test_concept_entry_uses_slug(self):
+        """Concept name is slugified in index entry."""
+        from create_pages_from_extract import build_index_entries
+        concepts = [{"name": "转债Smart Beta框架", "description": "可转债Smart Beta策略框架"}]
+        entities = []
+        entries = build_index_entries("转债Smart Beta", concepts, entities, "test summary text")
+        concept_entries = entries["concept"]
+        assert len(concept_entries) == 1
+        # Wikilink target must be slugified
+        assert "[[转债smart-beta框架]]" in concept_entries[0]
+        assert "[[转债Smart Beta框架]]" not in concept_entries[0]
+
+    def test_entity_entry_uses_slug(self):
+        """Entity name is slugified in index entry."""
+        from create_pages_from_extract import build_index_entries
+        concepts = []
+        entities = [{"name": "OpenAI", "description": "AI research company"}]
+        entries = build_index_entries("Test Source", concepts, entities, "summary")
+        entity_entries = entries["entity"]
+        assert len(entity_entries) == 1
+        assert "[[openai]]" in entity_entries[0]
+
+    def test_source_entry_uses_slug(self):
+        """Source title is slugified in index entry."""
+        from create_pages_from_extract import build_index_entries
+        entries = build_index_entries("浅谈策略适用性与Smart Beta", [], [], "a summary")
+        source_entries = entries["source"]
+        assert len(source_entries) == 1
+        assert "[[浅谈策略适用性与smart-beta]]" in source_entries[0]
+
+    def test_empty_returns_empty_lists(self):
+        """No concepts/entities returns empty lists."""
+        from create_pages_from_extract import build_index_entries
+        entries = build_index_entries("Test", [], [], "summary")
+        assert entries["concept"] == []
+        assert entries["entity"] == []
+        assert len(entries["source"]) == 1

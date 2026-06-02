@@ -28,6 +28,12 @@ import sys
 from datetime import date
 from pathlib import Path
 
+# Ensure stdout/stderr handle Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 def parse_frontmatter(content: str) -> tuple[dict | None, str, str]:
     """Split file content into frontmatter dict, body, and raw frontmatter text.

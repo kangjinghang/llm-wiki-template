@@ -10,7 +10,8 @@ import pytest
 # Add scripts/ to path so we can import functions
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from extract_knowledge import load_api_config, extract_claude_md_sections, build_extraction_prompt, parse_llm_response, derive_slug, resolve_article_path
+from extract_knowledge import load_api_config, extract_claude_md_sections, build_extraction_prompt, parse_llm_response, resolve_article_path
+from slug_utils import derive_slug
 
 
 class TestDeriveSlug:
@@ -98,6 +99,7 @@ class TestLoadApiConfig:
         monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-key")
         monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.api.test.com")
         monkeypatch.delenv("ANTHROPIC_DEFAULT_OPUS_MODEL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
         config = load_api_config(settings_path)
         assert config is not None
         assert config["api_key"] == "env-key"
@@ -295,3 +297,63 @@ class TestResolveArticlePath:
 
         result = resolve_article_path(tmp_path, use_next=True)
         assert result is None
+
+    def test_next_skips_empty_raw_path(self, tmp_path):
+        """Source page with empty raw_path still counts as processed."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+        sources_dir = tmp_path / "wiki" / "sources"
+        sources_dir.mkdir(parents=True)
+        meta_dir = tmp_path / "wiki" / "meta"
+        meta_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+        (raw_dir / "[20200102]beta.md").write_text("B", encoding="utf-8")
+
+        # Source page for alpha exists but raw_path is EMPTY
+        (sources_dir / "alpha.md").write_text(
+            '---\ntitle: "Alpha"\nraw_path: ""\n---\nBody\n', encoding="utf-8"
+        )
+        # Extract JSON for alpha exists (confirming it was processed)
+        (meta_dir / "extract-alpha.json").write_text('{"title": "Alpha"}', encoding="utf-8")
+
+        result = resolve_article_path(tmp_path, use_next=True)
+        assert result == "raw/articles/[20200102]beta.md"
+
+    def test_next_skips_when_extract_exists(self, tmp_path):
+        """Extract JSON alone (no source page) marks article as processed."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+        meta_dir = tmp_path / "wiki" / "meta"
+        meta_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+        (raw_dir / "[20200102]beta.md").write_text("B", encoding="utf-8")
+
+        # Extract JSON for alpha exists (but no source page)
+        (meta_dir / "extract-alpha.json").write_text('{"title": "Alpha"}', encoding="utf-8")
+
+        result = resolve_article_path(tmp_path, use_next=True)
+        assert result == "raw/articles/[20200102]beta.md"
+
+    def test_next_skips_when_extract_and_empty_raw_path(self, tmp_path):
+        """Both extract JSON + source page with empty raw_path → skip."""
+        raw_dir = tmp_path / "raw" / "articles"
+        raw_dir.mkdir(parents=True)
+        sources_dir = tmp_path / "wiki" / "sources"
+        sources_dir.mkdir(parents=True)
+        meta_dir = tmp_path / "wiki" / "meta"
+        meta_dir.mkdir(parents=True)
+
+        (raw_dir / "[20200101]alpha.md").write_text("A", encoding="utf-8")
+        (raw_dir / "[20200102]beta.md").write_text("B", encoding="utf-8")
+
+        # Source page with empty raw_path
+        (sources_dir / "alpha.md").write_text(
+            '---\ntitle: "Alpha"\nraw_path: ""\n---\nBody\n', encoding="utf-8"
+        )
+        # Plus extract JSON
+        (meta_dir / "extract-alpha.json").write_text('{"title": "Alpha"}', encoding="utf-8")
+
+        result = resolve_article_path(tmp_path, use_next=True)
+        assert result == "raw/articles/[20200102]beta.md"

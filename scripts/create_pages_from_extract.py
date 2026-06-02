@@ -25,7 +25,14 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-from create_page import slugify, load_template, fill_template, fill_fm_field, type_to_dir
+# Ensure stdout/stderr handle Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+from create_page import load_template, fill_template, fill_fm_field, type_to_dir
+from slug_utils import slugify, derive_slug
 from extract_knowledge import load_api_config
 from merge_frontmatter import (
     parse_frontmatter, merge_array_field,
@@ -47,6 +54,29 @@ def _auto_fix_wikilinks(text: str) -> str:
     return text
 
 
+def normalize_wikilink_slugs(text: str) -> str:
+    """Normalize wikilink targets to match slugify conventions.
+
+    Converts [[Foo Bar]] → [[foo-bar]], [[修正2.0]] → [[修正2-0]].
+    Preserves alias syntax: [[Slug|Display]] → [[slug|Display]].
+    This prevents dead links caused by LLM using dots/spaces instead of hyphens.
+    """
+    def _normalize_target(m):
+        inner = m.group(1)
+        if "|" in inner:
+            raw_target, display = inner.split("|", 1)
+        else:
+            raw_target = inner
+            display = None
+
+        normalized = slugify(raw_target.strip())
+        if display:
+            return f"[[{normalized}|{display}]]"
+        return f"[[{normalized}]]"
+
+    return re.sub(r'\[\[([^\]]+)\]\]', _normalize_target, text)
+
+
 def _create_page(
     wiki_root: Path,
     template_dir: Path,
@@ -57,6 +87,7 @@ def _create_page(
     raw_path: str | None = None,
     compute_hash: bool = False,
     tags: list[str] | None = None,
+    sources: list[str] | None = None,
 ) -> Path | None:
     """Create a single wiki page. Returns path or None if it already exists."""
     slug = slugify(title)
@@ -94,8 +125,18 @@ def _create_page(
     if summary:
         filled = fill_fm_field(filled, "summary", f'"{summary}"')
 
+    # Fill sources (so new pages are never created with sources: [])
+    if sources:
+        parts = filled.split("---", 2)
+        if len(parts) >= 3:
+            raw_fm = parts[1]
+            body_part = parts[2]
+            raw_fm = merge_array_field(raw_fm, "sources", sources)
+            filled = "---" + raw_fm + "---" + body_part
+
     # Replace body with content
     content = _auto_fix_wikilinks(content)
+    content = normalize_wikilink_slugs(content)
     if content:
         parts = filled.split("---", 2)
         if len(parts) >= 3:
@@ -365,11 +406,43 @@ def find_raw_path_for_extract(wiki_root: Path, extract_path: str | Path) -> str 
         return None
 
     for article in sorted(raw_dir.glob("*.md")):
-        article_slug = re.sub(r"^\[\d+\]", "", article.stem).lower()
+        article_slug = derive_slug(f"raw/articles/{article.name}")
         if article_slug == slug:
             return f"raw/articles/{article.name}"
 
     return None
+
+
+def build_index_entries(
+    title: str,
+    concepts: list[dict],
+    entities: list[dict],
+    summary: str,
+) -> dict[str, list[str]]:
+    """Build index entry strings with slugified wikilink targets.
+
+    Returns a dict with keys "source", "concept", "entity", "synthesis"
+    mapping to lists of entry strings like "[[slug]] — description".
+    """
+    entries_map: dict[str, list[str]] = {"source": [], "concept": [], "entity": [], "synthesis": []}
+
+    if title:
+        source_slug = slugify(title)
+        entries_map["source"].append(f"[[{source_slug}]] — {summary[:80]}")
+
+    for concept in concepts:
+        name = concept.get("name", "")
+        desc = concept.get("description", "")
+        if name:
+            entries_map["concept"].append(f"[[{slugify(name)}]] — {desc}")
+
+    for entity in entities:
+        name = entity.get("name", "")
+        desc = entity.get("description", "")
+        if name:
+            entries_map["entity"].append(f"[[{slugify(name)}]] — {desc}")
+
+    return entries_map
 
 
 def _find_existing_page(wiki_root: Path, page_type: str, name: str) -> Path | None:
@@ -447,6 +520,7 @@ def main() -> int:
         result = _create_page(
             wiki_root, template_dir, "concept", name,
             summary=desc, content=page_content, tags=tags,
+            sources=[source_wikilink],
         )
         if result:
             created_pages.append(f"concept: {result.name}")
@@ -464,6 +538,7 @@ def main() -> int:
         result = _create_page(
             wiki_root, template_dir, "entity", name,
             summary=desc, content=page_content, tags=tags,
+            sources=[source_wikilink],
         )
         if result:
             created_pages.append(f"entity: {result.name}")
@@ -531,19 +606,7 @@ def main() -> int:
     if index_path.exists():
         index_content = index_path.read_text(encoding="utf-8")
 
-        entries_map = {"source": [], "concept": [], "entity": [], "synthesis": []}
-        if title:
-            entries_map["source"].append(f"{source_wikilink} — {summary[:80]}")
-        for concept in concepts:
-            name = concept.get("name", "")
-            desc = concept.get("description", "")
-            if name:
-                entries_map["concept"].append(f"[[{name}]] — {desc}")
-        for entity in entities:
-            name = entity.get("name", "")
-            desc = entity.get("description", "")
-            if name:
-                entries_map["entity"].append(f"[[{name}]] — {desc}")
+        entries_map = build_index_entries(title, concepts, entities, summary)
 
         for section_name, entries in entries_map.items():
             if entries:
