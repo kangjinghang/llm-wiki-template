@@ -36,7 +36,7 @@ When working inside this template repo, your role is **template maintenance**, n
 | `scripts/update_index.py` | Add deduplicated entries to wiki/index.md by section |
 | `scripts/update_overview.py` | Insert a new ### section into wiki/overview.md |
 | `scripts/slug_utils.py` | Shared slug generation (slugify, derive_slug) |
-| `scripts/backfill_sources.py` | One-time backfill of empty sources fields via wikilink reverse inference |
+| `scripts/fix_empty_sources.py` | Fix empty sources on non-seed pages via 4-strategy reverse inference (wikilink, extract JSON, body scan, keyword) |
 | `scripts/suggest_syntheses.py` | Identify cross-source analysis opportunities (3+ sources per concept) |
 | `scripts/promote_pages.py` | Promote page status based on content maturity (seed→developing→mature→evergreen) |
 | `scripts/create_syntheses.py` | Create synthesis pages from suggest_syntheses candidates via LLM API |

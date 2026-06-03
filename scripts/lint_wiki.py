@@ -42,12 +42,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-# Ensure stdout handles Unicode on Windows (GBK console default)
-if sys.stdout and hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if sys.stderr and hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 
 def count_words(text: str) -> int:
     """Count words in mixed Chinese/English text.
@@ -55,11 +49,18 @@ def count_words(text: str) -> int:
     Chinese characters are counted individually (each hanzi = 1 word).
     English/ASCII tokens are counted after whitespace splitting (len > 1).
     """
-    hanzi = len(re.findall(r'[一-鿿]', text))
+    hanzi = len(re.findall(r'[\u4e00-\u9fff]', text))
     # Remove Chinese characters then count remaining whitespace-separated tokens
-    remainder = re.sub(r'[一-鿿]', ' ', text)
+    remainder = re.sub(r'[\u4e00-\u9fff]', ' ', text)
     ascii_words = len([w for w in remainder.split() if len(w) > 1])
     return hanzi + ascii_words
+
+# Ensure stdout handles Unicode on Windows (GBK console default)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 LOG_FILENAME_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\.md$")
