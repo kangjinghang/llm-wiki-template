@@ -40,6 +40,7 @@ When working inside this template repo, your role is **template maintenance**, n
 | `scripts/suggest_syntheses.py` | Identify cross-source analysis opportunities (3+ sources per concept) |
 | `scripts/promote_pages.py` | Promote page status based on content maturity (seed→developing→mature→evergreen) |
 | `scripts/create_syntheses.py` | Create synthesis pages from suggest_syntheses candidates via LLM API |
+| `scripts/split_overview.py` | One-time split of overview.md 关键发现 into topic-specific overview files |
 
 ## Templates
 

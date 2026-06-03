@@ -17,6 +17,7 @@ Exit codes:
 import argparse
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 # Ensure stdout/stderr handle Unicode on Windows (GBK console default)
@@ -115,10 +116,41 @@ def main() -> int:
     parser.add_argument("wiki_root", help="Path to the wiki root directory")
     parser.add_argument("--content", required=True,
                         help="Section content to insert (heading + body)")
+    parser.add_argument("--topic", type=str, default=None,
+                        help="Write to a topic overview file in wiki/overviews/ instead of overview.md")
     args = parser.parse_args()
 
     wiki_root = Path(args.wiki_root).resolve()
-    overview_path = wiki_root / "wiki" / "overview.md"
+
+    if args.topic:
+        overviews_dir = wiki_root / "wiki" / "overviews"
+        overviews_dir.mkdir(parents=True, exist_ok=True)
+        overview_path = overviews_dir / f"{args.topic}-关键发现.md"
+        if not overview_path.exists():
+            # Create the topic file with minimal frontmatter
+            today = date.today().isoformat()
+            stub = (
+                '---\n'
+                f'title: "{args.topic}：关键发现"\n'
+                f'title_zh: "{args.topic}：关键发现"\n'
+                "type: overview\n"
+                f'summary: ""\n'
+                "tags: []\n"
+                "sources: []\n"
+                "origin: agent-compiled\n"
+                "status: developing\n"
+                f"created: {today}\n"
+                f"updated: {today}\n"
+                'review_by: ""\n'
+                "---\n\n"
+                f"# {args.topic}：关键发现\n\n"
+                "## Notes / 笔记\n\n"
+                "<!-- human:start -->\n<!-- human:end -->\n"
+            )
+            overview_path.write_text(stub, encoding="utf-8")
+            print(f"Created: {overview_path}")
+    else:
+        overview_path = wiki_root / "wiki" / "overview.md"
 
     if not overview_path.exists():
         print(f"ERROR: {overview_path} not found", file=sys.stderr)
